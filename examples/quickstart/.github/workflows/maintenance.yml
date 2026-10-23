@@ -1,0 +1,32 @@
+name: Delivery maintenance
+on:
+  schedule:
+    - cron: '23 * * * *' # CHANGE ME: reconciliation cadence
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Inspect delivery or diagnose signing
+        type: choice
+        options: [sweep, audit, app-store-preflight, verify-signing]
+        default: sweep
+jobs:
+  maintenance:
+    runs-on: macos-26 # CHANGE ME: hosted macOS or your self-hosted labels
+    timeout-minutes: 30
+    environment: ios-delivery
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    permissions: { contents: read, actions: read, issues: write }
+    steps:
+      - uses: thinkfishhook/mobile-delivery/maintenance@b28d3c3b7549f75988efc25880f1648a4ef336fd # v0.9.0-rc.1
+        with:
+          branch: main # CHANGE ME: same delivery branch
+          dispatch: ${{ toJSON(inputs) }}
+          delivery-enabled: ${{ vars.IOS_DELIVERY_ENABLED }}
+          appstore-enabled: ${{ vars.IOS_APPSTORE_ENABLED }}
+          asc-key-id: ${{ secrets.ASC_KEY_ID }}
+          asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          asc-private-key: ${{ secrets.ASC_PRIVATE_KEY }}
+          receipt-token: ${{ secrets.IOS_RECEIPT_TOKEN }}
+          distribution-p12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          distribution-p12-password: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          provisioning-profile: ${{ secrets.IOS_PROFILE_BASE64 }}

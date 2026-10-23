@@ -1,0 +1,170 @@
+name: Delivery maintenance
+description: Sweep delivery state, audit receipts, inspect App Store readiness or verify signing.
+author: Fish Hook
+branding:
+  icon: tool
+  color: blue
+inputs:
+  branch:
+    description: App delivery branch name, such as main or trunk.
+    required: true
+  dispatch:
+    description: JSON from toJSON(inputs); operation is sweep, audit, app-store-preflight or verify-signing. Scheduled runs always sweep.
+    default: '{}'
+  delivery-enabled:
+    description: IOS_DELIVERY_ENABLED variable, exactly true or false. A disabled sweep makes no changes.
+    required: true
+  appstore-enabled:
+    description: IOS_APPSTORE_ENABLED variable, exactly true or false; diagnostics do not enable releases.
+    default: 'false'
+  asc-key-id:
+    description: App Store Connect API key ID, required except for signing diagnostics.
+  asc-issuer-id:
+    description: App Store Connect API issuer ID, required except for signing diagnostics.
+  asc-private-key:
+    description: App Store Connect API PEM private key, required except for signing diagnostics.
+  receipt-token:
+    description: Repository token with Contents and Workflows read/write; required for enabled sweep and audit.
+  distribution-p12:
+    description: Base64 distribution certificate P12, required for verify-signing only.
+  distribution-p12-password:
+    description: Distribution certificate P12 password, required for verify-signing only.
+  provisioning-profile:
+    description: Base64 App Store provisioning profile, required for verify-signing only.
+  github-token:
+    description: GitHub API token with the caller job's minimum permissions.
+    default: ${{ github.token }}
+outputs:
+  operation:
+    description: Selected maintenance operation.
+    value: ${{ steps.summary.outputs.operation }}
+  health:
+    description: Reported run health or diagnostic step result.
+    value: ${{ steps.summary.outputs.health }}
+  outcome:
+    description: Delivery findings from the maintenance summary.
+    value: ${{ steps.summary.outputs.outcome }}
+runs:
+  using: composite
+  steps:
+    - name: Checkout the caller
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Compute engine cache key
+      id: engine-key
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        echo "key=$(bash "$tool_root/internal/engine/cache-key.sh" "$tool_root")" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-cache
+      with:
+        path: ${{ runner.temp }}/mobile-delivery-engine/${{ steps.engine-key.outputs.key }}
+        key: ${{ steps.engine-key.outputs.key }}
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-gradle
+      if: steps.engine-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          ~/.gradle/wrapper
+          ~/.gradle/caches
+        key: delivery-gradle-${{ steps.engine-key.outputs.key }}
+        restore-keys: delivery-gradle-mobile-delivery-${{ runner.os }}-${{ runner.arch }}-
+    - name: Install the action's engine
+      id: engine-install
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DELIVERY_ACTION_REPOSITORY: ${{ github.action_repository }}
+        DELIVERY_ACTION_SHA: ${{ github.action_ref }}
+        DELIVERY_ACTION_BRANCH: ${{ inputs.branch }}
+        DELIVERY_ACTION_INPUTS: ${{ inputs.dispatch }}
+        IOS_DELIVERY_ENABLED: ${{ inputs.delivery-enabled }}
+        IOS_APPSTORE_ENABLED: ${{ inputs.appstore-enabled }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        runtime="$RUNNER_TEMP/mobile-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB"
+        bash "$tool_root/internal/engine/install.sh" "$tool_root" "$runtime"
+        "$runtime/bin/mobile-delivery" configureComposite
+    - name: Check branch and deployment switch
+      id: gate
+      shell: bash
+      run: mobile-delivery gate
+    - name: Check caller queue and permissions
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      run: mobile-delivery jobPolicy
+    - name: Validate configuration and credential presence
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      env:
+        DELIVERY_SECRET_PRESENCE: >-
+          {"ASC_KEY_ID":${{ inputs.asc-key-id != '' }},"ASC_ISSUER_ID":${{ inputs.asc-issuer-id != '' }},"ASC_PRIVATE_KEY":${{ inputs.asc-private-key != '' }},"IOS_RECEIPT_TOKEN":${{ inputs.receipt-token != '' }},"IOS_DISTRIBUTION_P12_BASE64":${{ inputs.distribution-p12 != '' }},"IOS_DISTRIBUTION_P12_PASSWORD":${{ inputs.distribution-p12-password != '' }},"IOS_PROFILE_BASE64":${{ inputs.provisioning-profile != '' }}}
+      run: mobile-delivery validate
+    - name: Install pinned asc
+      if: steps.gate.outputs.run == 'true' && env.DELIVERY_OPERATION != 'verify-signing'
+      shell: bash
+      run: mobile-delivery installAsc
+    - name: Run sweep
+      id: sweep
+      if: steps.gate.outputs.run == 'true' && env.DELIVERY_OPERATION == 'sweep'
+      shell: bash
+      env:
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        IOS_RECEIPT_TOKEN: ${{ inputs.receipt-token }}
+        ASC_STRICT_AUTH: 'true'
+      run: mobile-delivery sweep
+    - name: Run audit
+      id: audit
+      if: steps.gate.outputs.run == 'true' && env.DELIVERY_OPERATION == 'audit'
+      shell: bash
+      env:
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        IOS_RECEIPT_TOKEN: ${{ inputs.receipt-token }}
+        ASC_STRICT_AUTH: 'true'
+      run: mobile-delivery audit
+    - name: Run app-store-preflight
+      id: preflight
+      if: steps.gate.outputs.run == 'true' && env.DELIVERY_OPERATION == 'app-store-preflight'
+      shell: bash
+      env:
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        ASC_STRICT_AUTH: 'true'
+      run: mobile-delivery appStorePreflight
+    - name: Run verify-signing
+      id: signing
+      if: steps.gate.outputs.run == 'true' && env.DELIVERY_OPERATION == 'verify-signing'
+      shell: bash
+      env:
+        IOS_DISTRIBUTION_P12_BASE64: ${{ inputs.distribution-p12 }}
+        IOS_DISTRIBUTION_P12_PASSWORD: ${{ inputs.distribution-p12-password }}
+        IOS_PROFILE_BASE64: ${{ inputs.provisioning-profile }}
+      run: mobile-delivery verifySigning
+    - name: Retain maintenance evidence
+      if: always() && env.DELIVERY_OPERATION != 'verify-signing'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: maintenance-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+        path: build/delivery
+        retention-days: 90
+        if-no-files-found: warn
+    - name: Summarize maintenance
+      id: summary
+      if: always() && steps.engine-install.outcome == 'success'
+      shell: bash
+      env:
+        DELIVERY_PHASE_OUTCOME: ${{ (steps.sweep.outcome == 'failure' || steps.audit.outcome == 'failure' || steps.preflight.outcome == 'failure' || steps.signing.outcome == 'failure') && 'failure' || (steps.sweep.outcome == 'success' || steps.audit.outcome == 'success' || steps.preflight.outcome == 'success' || steps.signing.outcome == 'success') && 'success' || 'skipped' }}
+      run: mobile-delivery compositeSummary

@@ -1,0 +1,132 @@
+name: App Store release
+description: Promote an eligible TestFlight build to App Review with retained evidence.
+author: Fish Hook
+branding:
+  icon: upload-cloud
+  color: blue
+inputs:
+  branch:
+    description: App delivery branch name, such as main or trunk.
+    required: true
+  dispatch:
+    description: JSON from toJSON(inputs); manual operation is promote with a non-empty reason and optional rollout phased or all. Scheduled runs select phased release.
+    default: '{}'
+  appstore-enabled:
+    description: IOS_APPSTORE_ENABLED repository or environment variable; must be exactly true or false.
+    required: true
+  asc-key-id:
+    description: App Store Connect API key ID.
+    required: true
+  asc-issuer-id:
+    description: App Store Connect API issuer ID.
+    required: true
+  asc-private-key:
+    description: App Store Connect API private key in PEM format.
+    required: true
+  receipt-token:
+    description: Repository token with Contents and Workflows read/write for submission receipt tags.
+    required: true
+  github-token:
+    description: GitHub API token with the caller job's minimum read permissions.
+    default: ${{ github.token }}
+outputs:
+  outcome:
+    description: Submission or skip explanation; empty when the gate prevents execution.
+    value: ${{ steps.release.outputs.outcome }}
+  version:
+    description: Submitted marketing version; empty when no submission occurs.
+    value: ${{ steps.release.outputs.version }}
+  build:
+    description: Submitted build number; empty when no submission occurs.
+    value: ${{ steps.release.outputs.build }}
+runs:
+  using: composite
+  steps:
+    - name: Checkout the caller
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Compute engine cache key
+      id: engine-key
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        echo "key=$(bash "$tool_root/internal/engine/cache-key.sh" "$tool_root")" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-cache
+      with:
+        path: ${{ runner.temp }}/mobile-delivery-engine/${{ steps.engine-key.outputs.key }}
+        key: ${{ steps.engine-key.outputs.key }}
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-gradle
+      if: steps.engine-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          ~/.gradle/wrapper
+          ~/.gradle/caches
+        key: delivery-gradle-${{ steps.engine-key.outputs.key }}
+        restore-keys: delivery-gradle-mobile-delivery-${{ runner.os }}-${{ runner.arch }}-
+    - name: Install the action's engine
+      id: engine-install
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DELIVERY_ACTION_REPOSITORY: ${{ github.action_repository }}
+        DELIVERY_ACTION_SHA: ${{ github.action_ref }}
+        DELIVERY_ACTION_BRANCH: ${{ inputs.branch }}
+        DELIVERY_ACTION_INPUTS: ${{ inputs.dispatch }}
+        IOS_DELIVERY_ENABLED: ${{ inputs.delivery-enabled }}
+        IOS_APPSTORE_ENABLED: ${{ inputs.appstore-enabled }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        runtime="$RUNNER_TEMP/mobile-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB"
+        bash "$tool_root/internal/engine/install.sh" "$tool_root" "$runtime"
+        "$runtime/bin/mobile-delivery" configureComposite
+    - name: Check branch and deployment switch
+      id: gate
+      shell: bash
+      run: mobile-delivery gate
+    - name: Check caller queue and permissions
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      run: mobile-delivery jobPolicy
+    - name: Validate configuration and credential presence
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      env:
+        DELIVERY_SECRET_PRESENCE: >-
+          {"ASC_KEY_ID":${{ inputs.asc-key-id != '' }},"ASC_ISSUER_ID":${{ inputs.asc-issuer-id != '' }},"ASC_PRIVATE_KEY":${{ inputs.asc-private-key != '' }},"IOS_RECEIPT_TOKEN":${{ inputs.receipt-token != '' }}}
+      run: mobile-delivery validate
+    - name: Install pinned asc
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      run: mobile-delivery installAsc
+    - name: Submit the eligible App Store release
+      id: release
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      env:
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+        GH_TOKEN: ${{ inputs.github-token }}
+        IOS_RECEIPT_TOKEN: ${{ inputs.receipt-token }}
+      run: mobile-delivery appStoreRelease
+    - name: Retain release evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: app-store-release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+        path: build/delivery
+        retention-days: 90
+        if-no-files-found: warn
+    - name: Summarize App Store release
+      if: always() && steps.engine-install.outcome == 'success'
+      shell: bash
+      env:
+        DELIVERY_PHASE_OUTCOME: ${{ steps.release.outcome }}
+      run: mobile-delivery compositeSummary

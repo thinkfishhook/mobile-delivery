@@ -1,0 +1,33 @@
+name: TestFlight
+on:
+  push:
+    branches: [main] # CHANGE ME: delivery branch
+  workflow_dispatch:
+    inputs:
+      operation: { description: Delivery operation, type: choice, options: [deliver, retry], default: deliver }
+      sha: { description: Exact commit for retry, type: string }
+      expected_attempt: { description: Last observed build number or none, type: string }
+      reason: { description: Why this retry is safe, type: string }
+      new_attempt: { description: Create another build of a delivered commit, type: boolean, default: false }
+jobs:
+  testflight:
+    runs-on: macos-26 # CHANGE ME: hosted macOS or your self-hosted labels
+    timeout-minutes: 330
+    environment: ios-delivery
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    permissions: { contents: read, actions: read, issues: write }
+    steps:
+      - uses: thinkfishhook/mobile-delivery/testflight@b28d3c3b7549f75988efc25880f1648a4ef336fd # v0.9.0-rc.1
+        # CHANGE ME: if the app needs build secrets, add their names to build_environment.
+        # env: { ANALYTICS_KEY: '${{ secrets.ANALYTICS_KEY }}' }
+        with:
+          branch: main # CHANGE ME: same delivery branch
+          dispatch: ${{ toJSON(inputs) }}
+          delivery-enabled: ${{ vars.IOS_DELIVERY_ENABLED }}
+          asc-key-id: ${{ secrets.ASC_KEY_ID }}
+          asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          asc-private-key: ${{ secrets.ASC_PRIVATE_KEY }}
+          receipt-token: ${{ secrets.IOS_RECEIPT_TOKEN }}
+          distribution-p12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          distribution-p12-password: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          provisioning-profile: ${{ secrets.IOS_PROFILE_BASE64 }}

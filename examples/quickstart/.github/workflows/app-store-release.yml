@@ -1,0 +1,38 @@
+name: App Store release
+on:
+  schedule:
+    - cron: '0 7 * * 3' # CHANGE ME: release cadence
+      timezone: America/New_York # CHANGE ME: release schedule time zone
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [promote]
+        default: promote
+        description: Submit an eligible TestFlight build
+      reason:
+        type: string
+        required: true
+        description: Why this manual release is needed
+      rollout:
+        type: choice
+        options: [phased, all]
+        default: phased
+        description: Release gradually or to all users
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ios-delivery
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    permissions: { contents: read, actions: read, issues: read }
+    steps:
+      - uses: thinkfishhook/mobile-delivery/app-store-release@b28d3c3b7549f75988efc25880f1648a4ef336fd # v0.9.0-rc.1
+        with:
+          branch: main # CHANGE ME: same delivery branch
+          dispatch: ${{ toJSON(inputs) }}
+          appstore-enabled: ${{ vars.IOS_APPSTORE_ENABLED }}
+          asc-key-id: ${{ secrets.ASC_KEY_ID }}
+          asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          asc-private-key: ${{ secrets.ASC_PRIVATE_KEY }}
+          receipt-token: ${{ secrets.IOS_RECEIPT_TOKEN }}

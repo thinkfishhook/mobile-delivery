@@ -1,0 +1,52 @@
+# Explicit correctness rules for the delivery integration/state machine. The
+# application's existing Detekt configuration is still run by the iOS gate.
+config:
+  validation: true
+potential-bugs:
+  active: true
+  AvoidReferentialEquality:
+    active: true
+  Deprecation:
+    active: true
+  DontDowncastCollectionTypes:
+    active: true
+  DoubleMutabilityForCollection:
+    active: true
+  EqualsAlwaysReturnsTrueOrFalse:
+    active: true
+  EqualsWithHashCodeExist:
+    active: true
+  ExplicitGarbageCollectionCall:
+    active: true
+  InvalidRange:
+    active: true
+  IteratorHasNextCallsNextMethod:
+    active: true
+  IteratorNotThrowingNoSuchElementException:
+    active: true
+  UnconditionalJumpStatementInLoop:
+    active: true
+  UnreachableCode:
+    active: true
+  UnsafeCallOnNullableType:
+    active: true
+  UnsafeCast:
+    active: false # Casts are confined to validated serialization boundaries.
+  UselessPostfixExpression:
+    active: true
+empty-blocks:
+  active: true
+  EmptyCatchBlock:
+    active: true
+  EmptyIfBlock:
+    active: true
+  EmptyWhileBlock:
+    active: true
+style:
+  active: true
+  ForbiddenComment:
+    active: true
+  UnusedPrivateFunction:
+    active: true
+  UnusedPrivateProperty:
+    active: true

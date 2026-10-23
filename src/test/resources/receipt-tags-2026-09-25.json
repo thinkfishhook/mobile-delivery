@@ -1,0 +1,12 @@
+[
+  {
+    "message": "{\"asc\": \"5.1.0\", \"asc_build_id\": \"00000000-0000-4000-8000-000000000002\", \"distributed_at\": \"2026-09-13T09:00:00.000000-04:00\", \"ipa_bytes\": 12000000, \"ipa_sha256\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"number\": \"235.2\", \"sha\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"version\": \"26.09.01\", \"workflow\": \"https://github.com/example/example-app/actions/runs/10001\", \"xcode\": \"26.6\"}",
+    "tag": "deploy/testflight/26.09.01/235.2",
+    "target": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+    "message": "{\"sha\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"version\":\"26.09.01\",\"number\":\"404.1\",\"asc_build_id\":\"00000000-0000-4000-8000-000000000003\",\"workflow\":\"https://github.com/example/example-app/actions/runs/10002\",\"ipa_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"ipa_bytes\":13000000,\"distributed_at\":\"2026-09-25T15:00:00.000000-04:00\",\"xcode\":\"26.6\",\"asc\":\"5.1.0\"}",
+    "tag": "deploy/testflight/26.09.01/404.1",
+    "target": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+]

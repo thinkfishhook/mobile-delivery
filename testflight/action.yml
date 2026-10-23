@@ -1,0 +1,215 @@
+name: TestFlight delivery
+description: Verify, archive and deliver an internal TestFlight build. Bind app build values as env on this step; only declared build_environment names reach app verification and archive commands.
+author: Fish Hook
+branding:
+  icon: package
+  color: blue
+inputs:
+  branch:
+    description: App delivery branch name, such as main or trunk.
+    required: true
+  dispatch:
+    description: JSON from toJSON(inputs); operation is deliver or retry. Retry requires sha, expected_attempt and reason; new_attempt explicitly requests another build of a delivered commit.
+    default: '{}'
+  delivery-enabled:
+    description: IOS_DELIVERY_ENABLED variable, exactly true or false. Disabled automatic runs verify without publishing; disabled manual runs fail with instructions.
+    required: true
+  asc-key-id:
+    description: App Store Connect API key ID.
+    required: true
+  asc-issuer-id:
+    description: App Store Connect API issuer ID.
+    required: true
+  asc-private-key:
+    description: App Store Connect API PEM private key.
+    required: true
+  receipt-token:
+    description: Repository token with Contents and Workflows read/write for receipt tags.
+    required: true
+  distribution-p12:
+    description: Base64 distribution certificate P12.
+    required: true
+  distribution-p12-password:
+    description: Distribution certificate P12 password.
+    required: true
+  provisioning-profile:
+    description: Base64 App Store provisioning profile.
+    required: true
+  github-token:
+    description: GitHub API token with the caller job's minimum permissions.
+    default: ${{ github.token }}
+outputs:
+  operation:
+    description: Selected verify, deliver, sweep or none operation; empty when gated.
+    value: ${{ steps.start.outputs.operation }}
+  sha:
+    description: Selected source commit.
+    value: ${{ steps.start.outputs.sha }}
+  version:
+    description: Marketing version confirmed available to internal testers.
+    value: ${{ steps.upload.outputs.version }}
+  build:
+    description: Build number confirmed available to internal testers.
+    value: ${{ steps.upload.outputs.build }}
+  published:
+    description: True after delivery or recovery confirms internal TestFlight availability; false when nothing was published.
+    value: ${{ steps.upload.outputs.published || 'false' }}
+runs:
+  using: composite
+  steps:
+    - name: Checkout the caller
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Compute engine cache key
+      id: engine-key
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        echo "key=$(bash "$tool_root/internal/engine/cache-key.sh" "$tool_root")" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-cache
+      with:
+        path: ${{ runner.temp }}/mobile-delivery-engine/${{ steps.engine-key.outputs.key }}
+        key: ${{ steps.engine-key.outputs.key }}
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-gradle
+      if: steps.engine-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          ~/.gradle/wrapper
+          ~/.gradle/caches
+        key: delivery-gradle-${{ steps.engine-key.outputs.key }}
+        restore-keys: delivery-gradle-mobile-delivery-${{ runner.os }}-${{ runner.arch }}-
+    - name: Install the action's engine
+      id: engine-install
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DELIVERY_ACTION_REPOSITORY: ${{ github.action_repository }}
+        DELIVERY_ACTION_SHA: ${{ github.action_ref }}
+        DELIVERY_ACTION_BRANCH: ${{ inputs.branch }}
+        DELIVERY_ACTION_INPUTS: ${{ inputs.dispatch }}
+        IOS_DELIVERY_ENABLED: ${{ inputs.delivery-enabled }}
+        IOS_APPSTORE_ENABLED: ${{ inputs.appstore-enabled }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        runtime="$RUNNER_TEMP/mobile-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB"
+        bash "$tool_root/internal/engine/install.sh" "$tool_root" "$runtime"
+        "$runtime/bin/mobile-delivery" configureComposite
+    - name: Select configured Xcode
+      shell: bash
+      run: mobile-delivery selectXcode
+    - name: Check branch and deployment switch
+      id: gate
+      shell: bash
+      run: mobile-delivery gate
+    - name: Check caller queue and permissions
+      if: steps.gate.outputs.run == 'true' || steps.gate.outputs.verify == 'true'
+      shell: bash
+      run: mobile-delivery jobPolicy
+    - name: Validate configuration and credential presence
+      if: steps.gate.outputs.run == 'true' || steps.gate.outputs.verify == 'true'
+      shell: bash
+      env:
+        DELIVERY_SECRET_PRESENCE: >-
+          {"ASC_KEY_ID":${{ inputs.asc-key-id != '' }},"ASC_ISSUER_ID":${{ inputs.asc-issuer-id != '' }},"ASC_PRIVATE_KEY":${{ inputs.asc-private-key != '' }},"IOS_RECEIPT_TOKEN":${{ inputs.receipt-token != '' }},"IOS_DISTRIBUTION_P12_BASE64":${{ inputs.distribution-p12 != '' }},"IOS_DISTRIBUTION_P12_PASSWORD":${{ inputs.distribution-p12-password != '' }},"IOS_PROFILE_BASE64":${{ inputs.provisioning-profile != '' }}}
+      run: mobile-delivery validate
+    - name: Install pinned asc
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      run: mobile-delivery installAsc
+    - name: Select the delivery operation
+      id: start
+      if: steps.gate.outputs.run == 'true' || steps.gate.outputs.verify == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+      run: mobile-delivery startRun
+    - name: Install Android tools when the app needs them
+      id: android-setup
+      if: steps.start.outputs.android == 'true' && (steps.start.outputs.operation == 'deliver' || steps.start.outputs.operation == 'verify')
+      uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      with:
+        packages: platform-tools
+    - name: Prepare the configured Android SDK
+      id: android
+      if: steps.start.outputs.android == 'true' && (steps.start.outputs.operation == 'deliver' || steps.start.outputs.operation == 'verify')
+      shell: bash
+      run: mobile-delivery setupAndroid
+    - name: Verify the app
+      id: verify
+      if: steps.start.outputs.operation == 'verify'
+      shell: bash
+      run: mobile-delivery verify
+    - name: Verify and archive the selected commit
+      id: prepare
+      if: steps.start.outputs.operation == 'deliver'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+        IOS_DISTRIBUTION_P12_BASE64: ${{ inputs.distribution-p12 }}
+        IOS_DISTRIBUTION_P12_PASSWORD: ${{ inputs.distribution-p12-password }}
+        IOS_PROFILE_BASE64: ${{ inputs.provisioning-profile }}
+      run: mobile-delivery buildBeta
+    - name: Retain the prepared package before Apple upload
+      id: package
+      if: steps.prepare.outputs.retain == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.prepare.outputs.artifact_name }}
+        path: ${{ steps.prepare.outputs.artifact_path }}
+        retention-days: 90
+        if-no-files-found: error
+    - name: Upload and distribute the retained build
+      id: upload
+      if: steps.prepare.outputs.publish == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        IOS_RECEIPT_TOKEN: ${{ inputs.receipt-token }}
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+      run: mobile-delivery uploadBeta
+    - name: Retain verification and delivery evidence
+      id: evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ios-delivery-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          build/ci-verification
+          build/delivery
+        retention-days: 90
+        if-no-files-found: warn
+    - name: Finish and sweep delivery state
+      if: ${{ !cancelled() && steps.start.outcome == 'success' && (steps.start.outputs.operation == 'deliver' || steps.start.outputs.operation == 'sweep') }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        IOS_RECEIPT_TOKEN: ${{ inputs.receipt-token }}
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+        IOS_EXECUTION_FAILED: ${{ steps.android-setup.outcome == 'failure' || steps.android.outcome == 'failure' || steps.verify.outcome == 'failure' || steps.prepare.outcome == 'failure' || steps.package.outcome == 'failure' || steps.upload.outcome == 'failure' || steps.evidence.outcome == 'failure' }}
+      run: mobile-delivery finishRun
+    - name: Summarize TestFlight delivery
+      if: always() && steps.engine-install.outcome == 'success'
+      shell: bash
+      env:
+        DELIVERY_PHASE_OUTCOME: ${{ steps.verify.outcome == 'failure' && 'failure' || steps.verify.outcome == 'success' && 'success' || steps.upload.outcome }}
+      run: mobile-delivery compositeSummary

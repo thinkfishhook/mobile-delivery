@@ -1,0 +1,32 @@
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency: { group: mobile-delivery-release, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: zulu
+          java-version: '21.0.11'
+      - name: Check and build the standalone CLI
+        run: ./gradlew --no-daemon check installDist
+      - name: Lint workflows and quickstart callers
+        run: bash internal/actionlint.sh
+      - name: Package the exact tag and its changelog notes
+        run: python3 -B internal/release.py package
+      - name: Publish the release and advance its stable major tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B internal/release.py publish

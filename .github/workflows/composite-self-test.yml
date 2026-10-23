@@ -1,0 +1,138 @@
+name: Composite self-test
+on:
+  push:
+    branches: ['**']
+  schedule:
+    - cron: '53 22 * * 5'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  disabled-rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency: { group: ios-rollout, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exercise the composite without credentials
+        id: rollout
+        continue-on-error: true
+        uses: ./app-store-rollout
+        with:
+          branch: ${{ github.ref_name }}
+          dispatch: '{"operation":"pause","reason":"Disabled composite smoke test"}'
+          appstore-enabled: 'false'
+          asc-key-id: ''
+          asc-issuer-id: ''
+          asc-private-key: ''
+      - name: Verify disabled event behavior
+        if: always()
+        env:
+          EVENT: ${{ github.event_name }}
+          RESULT: ${{ steps.rollout.outcome }}
+        run: |
+          [[ "$DELIVERY_COMPOSITE" == 'true' ]]
+          case "$EVENT" in
+            push|schedule) [[ "$RESULT" == 'success' ]] ;;
+            workflow_dispatch) [[ "$RESULT" == 'failure' ]] ;;
+            *) exit 1 ;;
+          esac
+  disabled-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: { contents: read, actions: read, issues: read }
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Exercise the composite without credentials
+        id: release
+        continue-on-error: true
+        uses: ./app-store-release
+        with:
+          branch: ${{ github.ref_name }}
+          dispatch: '{"operation":"promote","reason":"Disabled composite smoke test"}'
+          appstore-enabled: 'false'
+          asc-key-id: ''
+          asc-issuer-id: ''
+          asc-private-key: ''
+          receipt-token: ''
+      - name: Verify disabled event behavior
+        if: always()
+        env:
+          EVENT: ${{ github.event_name }}
+          RESULT: ${{ steps.release.outcome }}
+        run: |
+          [[ "$DELIVERY_COMPOSITE" == 'true' ]]
+          case "$EVENT" in
+            push|schedule) [[ "$RESULT" == 'success' ]] ;;
+            workflow_dispatch) [[ "$RESULT" == 'failure' ]] ;;
+            *) exit 1 ;;
+          esac
+  disabled-testflight:
+    runs-on: macos-26
+    timeout-minutes: 20
+    permissions: { contents: read, actions: read, issues: write }
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare credential-free verification fixture
+        run: |
+          printf '%s' "${JAVA_HOME-__UNSET__}" > "$RUNNER_TEMP/testflight-java-home"
+          command -v java > "$RUNNER_TEMP/testflight-java-path"
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          config = json.loads(pathlib.Path('src/test/resources/delivery.json').read_text())
+          config['xcode'] = subprocess.check_output(['xcodebuild', '-version'], text=True).splitlines()[0].split()[1]
+          config['android_packages'] = []
+          config['build_environment'] = ['ANALYTICS_KEY']
+          config['verification'] = {'commands': [['python3', 'internal/engine/test-composite-environment.py']], 'test_reports': ['build/composite-probe'], 'evidence': []}
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'composite-config.json').write_text(json.dumps(config))
+          PY
+      - name: Verify through the disabled TestFlight composite
+        id: testflight
+        continue-on-error: true
+        uses: ./testflight
+        env:
+          DELIVERY_CONFIG: ${{ runner.temp }}/composite-config.json
+          ANALYTICS_KEY: declared-build-value
+          UNDECLARED_SENTINEL: must-not-reach-app
+        with:
+          branch: ${{ github.ref_name }}
+          dispatch: '{}'
+          delivery-enabled: 'false'
+          asc-key-id: synthetic-unused
+          asc-issuer-id: synthetic-unused
+          asc-private-key: synthetic-unused
+          receipt-token: synthetic-unused
+          distribution-p12: synthetic-unused
+          distribution-p12-password: synthetic-unused
+          provisioning-profile: synthetic-unused
+      - name: Verify the app tests ran without publishing
+        if: always()
+        env:
+          EVENT: ${{ github.event_name }}
+          RESULT: ${{ steps.testflight.outcome }}
+          OPERATION: ${{ steps.testflight.outputs.operation }}
+          PUBLISHED: ${{ steps.testflight.outputs.published }}
+          VERIFIED_SHA: ${{ steps.testflight.outputs.sha }}
+        run: |
+          [[ "$DELIVERY_COMPOSITE" == 'true' && "$PUBLISHED" == 'false' ]]
+          [[ "${JAVA_HOME-__UNSET__}" == "$(cat "$RUNNER_TEMP/testflight-java-home")" ]]
+          [[ "$(command -v java)" == "$(cat "$RUNNER_TEMP/testflight-java-path")" ]]
+          if [[ "$EVENT" == 'workflow_dispatch' ]]; then
+            [[ "$RESULT" == 'failure' ]]
+          else
+            [[ "$RESULT" == 'success' && "$OPERATION" == 'verify' ]]
+            [[ "$VERIFIED_SHA" == "$GITHUB_SHA" ]]
+            python3 - <<'PY'
+          import json, pathlib
+          totals = json.loads(pathlib.Path('build/ci-verification/tests.json').read_text())
+          assert totals == {'build/composite-probe': {'tests': 3, 'failures': 0, 'errors': 0, 'skipped': 0}}, totals
+          PY
+          fi

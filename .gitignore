@@ -1,0 +1,23 @@
+.gradle/
+.kotlin/
+build/
+out/
+.idea/
+.vscode/
+*.iml
+local.properties
+.DS_Store
+
+# Test output
+*.xcresult
+
+# Signing and App Store Connect credentials, such as the files bootstrap reads
+.asc/
+secrets/
+*.p8
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+.env
+*.env

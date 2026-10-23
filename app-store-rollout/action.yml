@@ -1,0 +1,106 @@
+name: App Store rollout control
+description: Pause, resume or release an existing phased App Store rollout.
+author: Fish Hook
+branding:
+  icon: pause-circle
+  color: blue
+inputs:
+  branch:
+    description: App delivery branch name, such as main or trunk.
+    required: true
+  dispatch:
+    description: JSON dispatch inputs from toJSON(inputs); operation must be pause, resume or release-to-all and reason must be non-empty.
+    default: '{}'
+  appstore-enabled:
+    description: IOS_APPSTORE_ENABLED repository or environment variable; must be exactly true or false.
+    required: true
+  asc-key-id:
+    description: App Store Connect API key ID.
+    required: true
+  asc-issuer-id:
+    description: App Store Connect API issuer ID.
+    required: true
+  asc-private-key:
+    description: App Store Connect API private key in PEM format.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Checkout the caller
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Compute engine cache key
+      id: engine-key
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        echo "key=$(bash "$tool_root/internal/engine/cache-key.sh" "$tool_root")" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-cache
+      with:
+        path: ${{ runner.temp }}/mobile-delivery-engine/${{ steps.engine-key.outputs.key }}
+        key: ${{ steps.engine-key.outputs.key }}
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-gradle
+      if: steps.engine-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          ~/.gradle/wrapper
+          ~/.gradle/caches
+        key: delivery-gradle-${{ steps.engine-key.outputs.key }}
+        restore-keys: delivery-gradle-mobile-delivery-${{ runner.os }}-${{ runner.arch }}-
+    - name: Install the action's engine
+      id: engine-install
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DELIVERY_ACTION_REPOSITORY: ${{ github.action_repository }}
+        DELIVERY_ACTION_SHA: ${{ github.action_ref }}
+        DELIVERY_ACTION_BRANCH: ${{ inputs.branch }}
+        DELIVERY_ACTION_INPUTS: ${{ inputs.dispatch }}
+        IOS_DELIVERY_ENABLED: ${{ inputs.delivery-enabled }}
+        IOS_APPSTORE_ENABLED: ${{ inputs.appstore-enabled }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        runtime="$RUNNER_TEMP/mobile-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB"
+        bash "$tool_root/internal/engine/install.sh" "$tool_root" "$runtime"
+        "$runtime/bin/mobile-delivery" configureComposite
+    - name: Check branch and deployment switch
+      id: gate
+      shell: bash
+      run: mobile-delivery gate
+    - name: Check caller queue and permissions
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      run: mobile-delivery jobPolicy
+    - name: Validate configuration and credential presence
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      env:
+        DELIVERY_SECRET_PRESENCE: >-
+          {"ASC_KEY_ID":${{ inputs.asc-key-id != '' }},"ASC_ISSUER_ID":${{ inputs.asc-issuer-id != '' }},"ASC_PRIVATE_KEY":${{ inputs.asc-private-key != '' }}}
+      run: mobile-delivery validate
+    - name: Install pinned asc
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      run: mobile-delivery installAsc
+    - name: Control the phased rollout
+      id: control
+      if: steps.gate.outputs.run == 'true'
+      shell: bash
+      env:
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+      run: mobile-delivery rolloutControl
+    - name: Summarize rollout control
+      if: always() && steps.engine-install.outcome == 'success'
+      shell: bash
+      env:
+        DELIVERY_PHASE_OUTCOME: ${{ steps.control.outcome }}
+      run: mobile-delivery compositeSummary

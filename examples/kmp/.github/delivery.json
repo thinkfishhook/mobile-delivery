@@ -1,0 +1,32 @@
+{
+  "app_id": "1234567890",
+  "bundle_id": "com.example.app",
+  "team_id": "ABCDE12345",
+  "internal_group": "00000000-0000-0000-0000-000000000000",
+  "baseline": "0000000000000000000000000000000000000000",
+  "timezone": "America/New_York",
+  "xcode": "26.6",
+  "ios": {
+    "project": "iosApp/iosApp.xcodeproj",
+    "scheme": "iosApp",
+    "target": "iosApp",
+    "name": "ExampleApp"
+  },
+  "verification": {
+    "commands": [
+      ["./gradlew", "--no-daemon", "--console=plain", "detekt", ":composeApp:jvmTest", "--rerun"],
+      ["./gradlew", "--no-daemon", "--console=plain", ":composeApp:iosSimulatorArm64Test", "--rerun"]
+    ],
+    "test_reports": [
+      "composeApp/build/test-results/jvmTest",
+      "composeApp/build/test-results/iosSimulatorArm64Test"
+    ],
+    "evidence": ["composeApp/build/reports", "build/reports/detekt"]
+  },
+  "tester_notes": "Check sign-in, the main flows, purchases and restore, small screens and large text. Report regressions with the build number.",
+  "release_notes": {
+    "directory": "release-notes.d",
+    "fallback": "Maintenance improvements to Example App."
+  },
+  "android_packages": ["platforms;android-37.0", "build-tools;36.0.0"]
+}

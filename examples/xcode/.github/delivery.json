@@ -1,0 +1,56 @@
+{
+  "app_id": "1234567890",
+  "bundle_id": "com.example.app",
+  "team_id": "ABCDE12345",
+  "internal_group": "00000000-0000-0000-0000-000000000000",
+  "baseline": "0000000000000000000000000000000000000000",
+  "timezone": "America/New_York",
+  "xcode": "26.6",
+  "ios": {
+    "project": "App.xcodeproj",
+    "workspace": "App.xcworkspace",
+    "scheme": "App",
+    "target": "App",
+    "name": "App"
+  },
+  "verification": {
+    "commands": [
+      [
+        "xcodebuild",
+        "test",
+        "-workspace",
+        "App.xcworkspace",
+        "-scheme",
+        "App",
+        "-destination",
+        "platform=iOS Simulator,OS=26.5,name=iPhone 17",
+        "-resultBundlePath",
+        "build/tests/UnitTests.xcresult",
+        "-testPlan",
+        "UnitTests"
+      ],
+      [
+        "xcodebuild",
+        "test",
+        "-workspace",
+        "App.xcworkspace",
+        "-scheme",
+        "App",
+        "-destination",
+        "platform=iOS Simulator,OS=26.5,name=iPhone 17",
+        "-resultBundlePath",
+        "build/tests/UITests.xcresult",
+        "-testPlan",
+        "UITests"
+      ]
+    ],
+    "test_reports": [
+      "build/tests/UnitTests.xcresult",
+      "build/tests/UITests.xcresult"
+    ]
+  },
+  "release_notes": {
+    "fallback": "Maintenance improvements."
+  },
+  "tester_notes": "Check sign-in, the main flows, small screens and large text. Report regressions with the build number."
+}

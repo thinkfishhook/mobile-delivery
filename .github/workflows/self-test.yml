@@ -1,0 +1,77 @@
+name: Engine self-test
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  engine:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Record caller Java before engine setup
+        shell: bash
+        run: |
+          printf '%s' "${JAVA_HOME-__UNSET__}" > "$RUNNER_TEMP/caller-java-home"
+          command -v java > "$RUNNER_TEMP/caller-java-path"
+          java -version > "$RUNNER_TEMP/caller-java-version" 2>&1
+      - name: Compute engine cache key
+        id: engine-key
+        shell: bash
+        run: echo "key=$(bash internal/engine/cache-key.sh "$GITHUB_WORKSPACE")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: engine-cache
+        with:
+          path: ${{ runner.temp }}/mobile-delivery-engine/${{ steps.engine-key.outputs.key }}
+          key: ${{ steps.engine-key.outputs.key }}
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.gradle/wrapper
+            ~/.gradle/caches
+          key: delivery-gradle-${{ steps.engine-key.outputs.key }}
+          restore-keys: delivery-gradle-mobile-delivery-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install engine
+        shell: bash
+        env:
+          ENGINE_CACHE_HIT: ${{ steps.engine-cache.outputs.cache-hit }}
+        run: |
+          started=$SECONDS
+          bash internal/engine/install.sh "$GITHUB_WORKSPACE"
+          elapsed=$((SECONDS - started))
+          echo "Engine setup: ${elapsed}s; cache hit: $ENGINE_CACHE_HIT" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$ENGINE_CACHE_HIT" == 'true' ]]; then
+            [[ $elapsed -lt 15 ]] || { echo 'Cached engine setup exceeded 15 seconds'; exit 1; }
+          fi
+      - name: Run installed engine and install pinned asc
+        shell: bash
+        run: mobile-delivery installAsc
+      - name: Verify caller Java is unchanged
+        shell: bash
+        run: |
+          [[ "${JAVA_HOME-__UNSET__}" == "$(cat "$RUNNER_TEMP/caller-java-home")" ]]
+          [[ "$(command -v java)" == "$(cat "$RUNNER_TEMP/caller-java-path")" ]]
+          java -version > "$RUNNER_TEMP/after-java-version" 2>&1
+          cmp "$RUNNER_TEMP/caller-java-version" "$RUNNER_TEMP/after-java-version"
+      - name: Select a non-default installed Xcode
+        if: runner.os == 'macOS'
+        shell: bash
+        run: python3 internal/engine/test-xcode-selection.py
+      - name: Verify selected Xcode reaches the next step
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          actual="$(xcodebuild -version | head -n 1)"
+          [[ "$actual" == "$EXPECTED_XCODE" && "$actual" != "$ORIGINAL_XCODE" ]]

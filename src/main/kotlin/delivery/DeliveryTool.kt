@@ -1,0 +1,336 @@
+package delivery
+
+import java.nio.file.Path
+import kotlin.io.path.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+private val eventJson = Json { ignoreUnknownKeys = true }
+
+private class ReportedSweepFailure :
+    CommandError("Sweep hit a repair error; see structured summary")
+
+class DeliveryTool(
+    private val root: Path,
+    private val config: DeliveryConfig,
+    private val commands: Commands,
+    private val env: Map<String, String>,
+) {
+    private var summaryWritten = false
+    private val apple = Asc(config, commands, env)
+
+    fun run(mode: String) {
+        try {
+            execute(mode)
+        } catch (error: Exception) {
+            if (!summaryWritten)
+                writeSummary(
+                    RunSummary(
+                        "failed",
+                        "No delivery outcome inferred",
+                        listOfNotNull(error.message),
+                        emptyList(),
+                    )
+                )
+            throw error
+        }
+    }
+
+    private fun execute(mode: String) {
+        requireWorkflow(mode, env)
+        val branch =
+            requireNotNull(workflowInputs(env)?.branch) {
+                "$mode requires a branch in DELIVERY_INPUTS; set the caller's with: branch input"
+            }
+        val github = GitHub(env.getValue("GITHUB_REPOSITORY"), commands, env)
+        val hints =
+            github.workflowHints(
+                when (mode) {
+                    "appStoreRelease",
+                    "rolloutControl" -> "app-store-release.yml"
+                    "startRun",
+                    "buildBeta",
+                    "uploadBeta",
+                    "finishRun" -> "testflight-delivery.yml"
+                    else -> null
+                }
+            )
+        val source = GitSource(root, config, commands, branch)
+        val tags = GitHubReceiptTags(github)
+        val artifacts = GitHubBuildArtifacts(github, env["GITHUB_RUN_ID"] ?: "local")
+        val symbols =
+            ReleaseSymbols(
+                artifacts,
+                GitHubReleaseAssets(github),
+                root.resolve("build/release-symbols"),
+            )
+        val appStore =
+            AppStoreRelease(
+                config,
+                apple,
+                tags,
+                source,
+                symbols,
+                env,
+                hints = hints,
+                holdIssues = GitHubHoldIssues(github),
+            )
+        val beta =
+            BetaDelivery(
+                config,
+                apple,
+                tags,
+                artifacts,
+                source,
+                Verification(config, commands, env),
+                env,
+            )
+        requireActionsWriter(env, branch)
+        val payload =
+            env["GITHUB_EVENT_PATH"]?.let {
+                eventJson.decodeFromString<WorkflowEvent>(Path.of(it).readText())
+            } ?: WorkflowEvent()
+        val event = workflowInputs(env)?.let { payload.copy(inputs = it) } ?: payload
+        // Kotlin Multiplatform apps need the Android SDK before verification.
+        if (mode == "startRun") outputs("android=${config.androidPackages.isNotEmpty()}\n")
+        if (mode in setOf("startRun", "sweep") && env["IOS_DELIVERY_ENABLED"] != "true") {
+            if (mode == "startRun") {
+                val verify =
+                    env["GITHUB_EVENT_NAME"] == "push" ||
+                        event.inputs?.operation == "deliver" ||
+                        (env["DELIVERY_COMPOSITE"] == "true" &&
+                            env["GITHUB_EVENT_NAME"] == "schedule")
+                outputs("operation=${if (verify) "verify" else "none"}\n")
+                if (verify) outputs("sha=${env.getValue("GITHUB_SHA")}\n")
+            }
+            writeSummary(RunSummary("completed", "Delivery disabled", emptyList(), emptyList()))
+            return
+        }
+        if (mode in setOf("appStoreRelease", "appStorePreflight", "rolloutControl")) {
+            appStore(mode, event, appStore, symbols)
+            return
+        }
+        val selected = (event.inputs?.sha?.takeIf { it.isNotBlank() } ?: env.getValue("GITHUB_SHA"))
+        require(Regex("[a-f0-9]{40}").matches(selected)) { "Select an exact full commit SHA" }
+        val resolved = source.git("rev-parse", "$selected^{commit}")
+        require(resolved == selected) {
+            "Selected SHA $selected must resolve to that exact commit; git resolved $resolved"
+        }
+        source.git("merge-base", "--is-ancestor", config.baseline, selected)
+        source.git("merge-base", "--is-ancestor", selected, "origin/${branch}")
+        val pushStart = mode == "startRun" && env["GITHUB_EVENT_NAME"] == "push"
+        // checkout can reset origin/branch to a queued event's commit even after the branch moves.
+        val healthTip =
+            if (pushStart) github.currentBranchTip(branch)
+            else source.git("rev-parse", "origin/${branch}")
+        // A queued push that the branch has moved past is dropped before any record or Apple work.
+        // Explicit dispatches may still select older SHAs.
+        if (pushStart && selected != healthTip) {
+            outputs("operation=none\n")
+            writeSummary(
+                RunSummary(
+                    "completed",
+                    "internal/$selected: superseded by $healthTip",
+                    emptyList(),
+                    emptyList(),
+                )
+            )
+            return
+        }
+        val sweep =
+            Sweep(
+                config,
+                beta,
+                appStore,
+                apple,
+                tags,
+                source,
+                GitHubIncidents(github, config.incidentMarker, branch),
+                github::queuedPush,
+                hints,
+            )
+        val output = root.resolve("build/delivery").createDirectories()
+        try {
+            when (mode) {
+                "startRun" -> {
+                    when (val decision = beta.start(intent(event, selected))) {
+                        is StartDecision.Deliver -> outputs("operation=deliver\nsha=$selected\n")
+                        StartDecision.AlreadyDelivered ->
+                            outputs("operation=sweep\nsha=$selected\n")
+                        StartDecision.SweepOnly -> outputs("operation=sweep\nsha=$selected\n")
+                        is StartDecision.Refused -> error(decision.reason)
+                    }
+                }
+                "buildBeta" -> {
+                    require(env["IOS_DELIVERY_ENABLED"] == "true") { "Delivery disabled" }
+                    val operation = intent(event, selected)
+                    val build = beta.build(operation, output)
+                    val packageRoot = root.resolve("build/retained-package")
+                    if (build != null) {
+                        val bytes = localPackage(build, output.resolve(selected))
+                        packageRoot.toFile().deleteRecursively()
+                        val destination = packageRoot.resolve(selected).createDirectories()
+                        bytes.forEach { (name, value) ->
+                            destination.resolve(name).writeBytes(value)
+                        }
+                    }
+                    // Upload runs for a new build or for one Apple already has (resume).
+                    val publish = build != null || beta.start(operation) is StartDecision.Deliver
+                    outputs(
+                        "publish=$publish\nretain=${build != null}\nartifact_name=${build?.artifact?.artifactName.orEmpty()}\nartifact_path=$packageRoot\n"
+                    )
+                }
+                "uploadBeta" -> {
+                    val receipt = beta.upload(intent(event, selected), output)
+                    outputs(
+                        "published=${receipt != null}\nversion=${receipt?.version ?: ""}\nbuild=${receipt?.number ?: ""}\n"
+                    )
+                }
+                "finishRun" ->
+                    report(sweep, sweep.run(healthTip), env["IOS_EXECUTION_FAILED"] == "true")
+                "sweep" -> {
+                    github.ensureDeliveryLabels()
+                    report(sweep, sweep.run(healthTip), false)
+                }
+                "audit" -> report(sweep, sweep.run(healthTip, audit = true), false)
+                else -> error("Unsupported delivery task: $mode")
+            }
+        } catch (error: Exception) {
+            if (error is ReportedSweepFailure) throw error
+            // Red runs say why on the run page, not only in the log.
+            error.message?.let { annotate("error", it) }
+            writeSummary(
+                RunSummary(
+                    "failed",
+                    "See the run evidence",
+                    listOfNotNull(error.message),
+                    emptyList(),
+                )
+            )
+            throw error
+        }
+    }
+
+    private fun appStore(
+        mode: String,
+        event: WorkflowEvent,
+        release: AppStoreRelease,
+        symbols: ReleaseSymbols,
+    ) {
+        if (mode == "appStorePreflight") {
+            val checks = AppStorePreflight(release, apple, symbols).verify()
+            writeSummary(
+                RunSummary("completed", checks.joinToString("; "), emptyList(), emptyList())
+            )
+            return
+        }
+        if (env["IOS_APPSTORE_ENABLED"] == "false") {
+            writeSummary(
+                RunSummary("completed", "App Store release disabled", emptyList(), emptyList())
+            )
+            return
+        }
+        val operation = event.inputs?.operation ?: "promote"
+        val rollout = operation in setOf("pause", "resume", "release-to-all")
+        // Rollout changes run in their own job so they never wait behind a delivery.
+        if (mode == "rolloutControl")
+            require(env["GITHUB_EVENT_NAME"] == "workflow_dispatch" && rollout) {
+                "rolloutControl runs only pause, resume and release-to-all dispatches"
+            }
+        else require(!rollout) { "$operation runs in the rollout-control job" }
+        val result =
+            when {
+                mode == "rolloutControl" -> release.control(operation, event.inputs?.reason)
+                env["GITHUB_EVENT_NAME"] == "schedule" ->
+                    release.promote(ReleaseRequest(scheduled = true, reason = null, phased = true))
+                operation == "promote" ->
+                    release.promote(
+                        ReleaseRequest(
+                            scheduled = false,
+                            reason = event.inputs?.reason,
+                            phased = event.inputs?.rollout != "all",
+                        )
+                    )
+                else -> error("Unsupported App Store operation: $operation")
+            }
+        result.action?.let { annotate("warning", it) }
+        env["GITHUB_OUTPUT"]?.let {
+            writeEnvironment(
+                mapOf(
+                    "outcome" to result.outcome,
+                    "version" to result.version.orEmpty(),
+                    "build" to result.build.orEmpty(),
+                ),
+                Path.of(it),
+            )
+        }
+        writeSummary(
+            RunSummary("completed", result.outcome, listOfNotNull(result.action), emptyList())
+        )
+    }
+
+    private fun intent(event: WorkflowEvent, sha: String): Operation {
+        if (env["IOS_DELIVERY_ENABLED"] != "true") return Operation.SweepOnly(sha)
+        val operation =
+            if (env["GITHUB_EVENT_NAME"] == "push") "deliver"
+            else event.inputs?.operation ?: "deliver"
+        // A rerun replays the original event, so a retry's expected attempt is still here.
+        if ((env["GITHUB_RUN_ATTEMPT"]?.toIntOrNull() ?: 1) > 1)
+            return Operation.Rerun(
+                sha,
+                event.inputs?.expectedAttempt?.takeIf { operation == "retry" },
+                event.inputs?.newAttempt == true && operation == "retry",
+            )
+        return when (operation) {
+            "deliver" -> Operation.Deliver(sha)
+            "retry" ->
+                Operation.Retry(
+                        sha,
+                        requireNotNull(event.inputs?.expectedAttempt) {
+                            "retry requires expected_attempt"
+                        },
+                        requireNotNull(event.inputs.reason) { "retry requires reason" },
+                        event.inputs.newAttempt,
+                    )
+                    .also { require(!event.inputs.sha.isNullOrBlank()) { "retry requires sha" } }
+            else -> error("Unsupported dispatch operation: $operation")
+        }
+    }
+
+    private fun outputs(value: String) {
+        env["GITHUB_OUTPUT"]?.let { Path.of(it).appendText(value) }
+        print(value)
+    }
+
+    private fun writeSummary(summary: RunSummary) {
+        summaryWritten = true
+        val encoded =
+            json.encodeToString(summary.copy(ignoredVersions = apple.ignoredVersions.sorted()))
+        root
+            .resolve("build/delivery")
+            .createDirectories()
+            .resolve("run-summary.json")
+            .writeText(encoded + "\n")
+        env["GITHUB_STEP_SUMMARY"]?.let { Path.of(it).appendText("\n```json\n$encoded\n```\n") }
+        println(encoded)
+    }
+
+    private fun report(sweep: Sweep, result: SweepReport, failed: Boolean) {
+        writeSummary(sweep.summary(result, failed))
+        result.findings.forEach { finding ->
+            finding.operatorAction?.let { annotate("warning", it) }
+            finding.repairError?.let { annotate("error", it) }
+        }
+        if (result.broken) throw ReportedSweepFailure()
+    }
+}
+
+@Serializable
+data class RunSummary(
+    val runHealth: String,
+    val deliveries: String,
+    val actionNeeded: List<String>,
+    val repairErrors: List<String>,
+    val ignoredVersions: List<String> = emptyList(),
+)
