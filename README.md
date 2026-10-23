@@ -7,8 +7,8 @@ Your repository owns the jobs, runners and secrets; each composite owns its deli
 ## Quick start
 
 Start with delivery disabled. A push will build and test your app and retain its evidence.
-It will not upload a build. The current prerelease is private: callers need organization
-access until the clean-history public launch is complete.
+It will not upload a build. This checkout prepares v1; the examples pin a tested source
+revision, and v1.0.0 has not been released yet.
 
 You need an existing iOS app with passing automated tests, an App Store Connect API key,
 an Apple distribution certificate exported as a password-protected P12, an App Store
@@ -32,9 +32,8 @@ manages its own JDK 21. Install and authenticate the GitHub CLI locally (`gh aut
    commands and public notes. The four action references are already pinned together.
 
 2. **Create the environment and disable both deployment switches.** Run from the app
-   checkout. Give a self-hosted runner group access to the app if applicable. For the
-   current private tool, its owner must also allow organization callers under the tool's
-   Settings → Actions → General → Access. No separate tool-download secret is needed.
+   checkout. Give a self-hosted runner group access to the app if applicable. No separate
+   tool-download secret is needed.
 
    ```sh
    gh api --method PUT 'repos/{owner}/{repo}/environments/ios-delivery'

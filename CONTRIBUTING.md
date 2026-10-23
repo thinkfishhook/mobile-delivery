@@ -50,8 +50,8 @@ Check and the hosted engine/composite tests to pass. A version tag must point to
 tested commit. For example, a prerelease rehearsal uses:
 
 ```sh
-git tag -a v0.9.0-rc.1 -m 'Prepare v0.9.0-rc.1'
-git push origin v0.9.0-rc.1
+git tag -a v1.0.0-rc.1 -m 'Prepare v1.0.0-rc.1'
+git push origin v1.0.0-rc.1
 ```
 
 The Release workflow reruns checks, builds `installDist`, and attaches a reproducible
@@ -66,5 +66,5 @@ install JDK 21, and run `mobile-delivery/bin/mobile-delivery bootstrap` with the
 arguments from the app checkout. Gradle is not needed for the downloaded CLI.
 
 Do not cut v1.0.0 until the publication, sample onboarding and app adoption acceptance
-checks are complete. The private prerelease rehearsal does not change repository
-visibility, app pins or App Store automation.
+checks are complete. Publishing a tool release does not enable App Store automation
+in apps that use it.
