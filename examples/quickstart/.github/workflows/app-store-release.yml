@@ -27,7 +27,7 @@ jobs:
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
     permissions: { contents: read, actions: read, issues: read }
     steps:
-      - uses: thinkfishhook/mobile-delivery/app-store-release@dfe3aad73ac4a80ac26d29d1d2ba7eb06dece431 # v1 preview (unreleased)
+      - uses: thinkfishhook/mobile-delivery/app-store-release@59493895f8fb17bafc70ec5c15adff3726afe547 # v1 preview (unreleased)
         with:
           branch: main # CHANGE ME: same delivery branch
           dispatch: ${{ toJSON(inputs) }}
