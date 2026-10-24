@@ -5,8 +5,23 @@ import kotlin.io.path.*
 import kotlinx.serialization.json.*
 
 internal class CompositeChecks {
-    private val actions =
-        listOf("testflight", "maintenance", "app-store-release", "app-store-rollout")
+    private val operationPhases =
+        mapOf(
+            "testflight" to
+                listOf(
+                    "selectXcode",
+                    "startRun",
+                    "setupAndroid",
+                    "verify",
+                    "buildBeta",
+                    "uploadBeta",
+                    "finishRun",
+                ),
+            "maintenance" to listOf("sweep", "audit", "appStorePreflight", "verifySigning"),
+            "app-store-release" to listOf("appStoreRelease"),
+            "app-store-rollout" to listOf("rolloutControl"),
+        )
+    private val supportedActions = operationPhases.keys.toList()
     private val engineIds = listOf("engine-key", "engine-cache", "engine-gradle", "engine-install")
     private val applePhases =
         setOf(
@@ -41,12 +56,12 @@ internal class CompositeChecks {
             ?.groupValues
             ?.get(1)
 
-    fun validate(root: Path) {
+    fun validate(root: Path, actions: List<String> = supportedActions) {
         var engine: List<Map<*, *>>? = null
         for (action in actions) {
             val path = root.resolve("$action/action.yml")
-            if (!path.exists()) continue // Enforced as each new surface lands.
             val file = "$action/action.yml"
+            require(path.isRegularFile()) { "$file: required composite action is missing" }
             val document = workflowDocument(path.readText())
             val runs = yamlMapping(document["runs"])
             require(runs["using"] == "composite") { "$file: expected runs.using: composite" }
@@ -62,6 +77,14 @@ internal class CompositeChecks {
             engine = installed
             require(installed.map(steps::indexOf).zipWithNext().all { (a, b) -> a < b }) {
                 "$file: engine cache must precede installation"
+            }
+            val required =
+                listOf("gate", "jobPolicy", "validate", "installAsc", "compositeSummary") +
+                    operationPhases.getValue(action)
+            required.forEach { command ->
+                require(steps.count { phase(it) == command } == 1) {
+                    "$file: expected one $command phase"
+                }
             }
             val phases = steps.mapNotNull(::phase).filter { it != "selectXcode" }
             val selections = steps.filter { phase(it) == "selectXcode" }
@@ -82,7 +105,7 @@ internal class CompositeChecks {
                 "$file: install the engine before gate"
             }
             steps.forEach { step -> validateStep(file, step) }
-            if ("startRun" in phases) validateDelivery(file, steps)
+            if (action == "testflight") validateDelivery(file, steps)
             val upload = steps.indexOfFirst { phase(it) == "uploadBeta" }
             if (upload >= 0) {
                 val prepare = steps.indexOfFirst { phase(it) == "buildBeta" }
