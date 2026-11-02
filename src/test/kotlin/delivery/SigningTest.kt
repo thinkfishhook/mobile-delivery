@@ -390,4 +390,61 @@ class SigningTest {
             }
         }
     }
+
+    @Test
+    fun `signing inputs decode bytes and validate plist with no keychain commands`() =
+        temp { home ->
+            val commands = signingCommands()
+            val inputs = SigningInputs.read(config, commands, signingEnv(home), home)
+            assertContentEquals(byteArrayOf(4, 5, 6), inputs.p12)
+            assertContentEquals(byteArrayOf(1, 2, 3), inputs.profile)
+            assertEquals("test-profile", inputs.plist.string("UUID"))
+            assertEquals("test-profile", inputs.provisioningProfile.uuid)
+            assertEquals(
+                setOf(digest(byteArrayOf(1, 2, 3), "SHA-1").uppercase()),
+                inputs.provisioningProfile.certificates,
+            )
+            assertEquals(listOf("cms"), commands.calls.map(::operation))
+        }
+
+    @Test
+    fun `invalid signing inputs fail before returning a value without keychain commands`() =
+        temp { home ->
+            for (secret in listOf("IOS_DISTRIBUTION_P12_BASE64", "IOS_PROFILE_BASE64")) {
+                val commands = signingCommands()
+                assertFailsWith<IllegalArgumentException> {
+                    SigningInputs.read(config, commands, signingEnv(home) + (secret to "%%%"), home)
+                }
+                assertTrue(commands.calls.isEmpty())
+            }
+            val commands = signingCommands(profileXml.replace("2099-01-01", "2020-01-01"))
+            assertEquals(
+                "Provisioning profile expired",
+                assertFailsWith<IllegalArgumentException> {
+                        SigningInputs.read(config, commands, signingEnv(home), home)
+                    }
+                    .message,
+            )
+            assertEquals(listOf("cms"), commands.calls.map(::operation))
+        }
+
+    @Test
+    fun `profile CMS decoding failure never enters keychain session and cleans temporary input`() =
+        temp { home ->
+            for (diagnostic in listOf(false, true)) {
+                val commands =
+                    RecordingCommands().apply {
+                        respond = { CommandResult(1, "", "invalid CMS profile") }
+                    }
+                val failure =
+                    assertFailsWith<CommandError> {
+                        Signing(config, commands, signingEnv(home)).withIdentity(diagnostic) {
+                            fail("must not reach signing action")
+                        }
+                    }
+                assertEquals("security failed (exit 1)", failure.message)
+                assertEquals(listOf("cms"), commands.calls.map(::operation))
+                assertFalse(Path(commands.calls.single().args.last()).parent.exists())
+            }
+        }
 }

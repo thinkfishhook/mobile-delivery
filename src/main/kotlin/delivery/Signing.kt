@@ -3,7 +3,6 @@ package delivery
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.time.Instant
-import java.util.Base64
 import java.util.UUID
 import java.util.zip.ZipFile
 import kotlin.io.path.*
@@ -122,108 +121,97 @@ class Signing(
     private fun security(vararg args: String) = commands.security(args.toList(), environment)
 
     fun <T> withIdentity(diagnostic: Boolean = false, action: (SigningIdentity) -> T): T =
-        withSigningLock(Path.of(env.getValue("HOME"))) { signingSession(diagnostic, action) }
-
-    private fun <T> signingSession(diagnostic: Boolean, action: (SigningIdentity) -> T): T {
-        val names =
-            listOf(
-                "IOS_DISTRIBUTION_P12_BASE64",
-                "IOS_DISTRIBUTION_P12_PASSWORD",
-                "IOS_PROFILE_BASE64",
-            )
-        names.forEach { require(!env[it].isNullOrBlank()) { "Missing GitHub secret $it" } }
-        val temp = createTempDirectory("ios-signing-")
-        try {
-            val identity =
-                temp.resolve("identity.p12").apply {
-                    writeBytes(Base64.getDecoder().decode(env.getValue(names[0])))
-                }
-            val profile =
-                temp.resolve("app.mobileprovision").apply {
-                    writeBytes(Base64.getDecoder().decode(env.getValue(names[2])))
-                }
-            val decoded =
-                validateProfile(
-                    parsePlist(run("security", "cms", "-D", "-i", profile.toString())),
-                    config,
-                )
-            val keychain = temp.resolve("signing.keychain-db").toString()
-            val password = UUID.randomUUID().toString() + UUID.randomUUID()
-            val search =
-                Regex("\"([^\"]+)\"")
-                    .findAll(run("security", "list-keychains", "-d", "user"))
-                    .map { it.groupValues[1] }
-                    .toList()
-            val installed =
-                Path.of(
-                    env.getValue("HOME"),
-                    "Library/MobileDevice/Provisioning Profiles",
-                    "${decoded.uuid}.mobileprovision",
-                )
-            installed.parent.createDirectories()
-            val previous = if (installed.exists()) installed.readBytes() else null
+        withSigningLock(Path.of(env.getValue("HOME"))) {
+            val temp = createTempDirectory("ios-signing-")
             try {
-                security("create-keychain", "-p", password, keychain)
-                run("security", "set-keychain-settings", "-lut", "21600", keychain)
-                security("unlock-keychain", "-p", password, keychain)
-                security(
-                    "import",
-                    identity.toString(),
-                    "-k",
-                    keychain,
-                    "-P",
-                    env.getValue(names[1]),
-                    "-T",
-                    "/usr/bin/codesign",
-                    "-T",
-                    "/usr/bin/security",
-                )
-                run(
-                    "security",
-                    "list-keychains",
-                    "-d",
-                    "user",
-                    "-s",
-                    keychain,
-                    *search.toTypedArray(),
-                )
-                val identities =
-                    run("security", "find-identity", "-v", "-p", "codesigning", keychain)
-                val valid = distributionIdentities(identities)
-                val matches = valid.intersect(decoded.certificates)
-                if (diagnostic || matches.size != 1) {
-                    val report =
-                        signingDiagnostic(
-                            decoded.certificates,
-                            valid,
-                            run("security", "find-certificate", "-a", "-Z", keychain),
-                            run("security", "find-identity", "-p", "codesigning", keychain),
-                        )
-                    require(matches.size == 1) { report }
-                    println(report)
-                }
-                if (diagnostic) return action(SigningIdentity(decoded.uuid, matches.single()))
-                security(
-                    "set-key-partition-list",
-                    "-S",
-                    "apple-tool:,apple:,codesign:",
-                    "-s",
-                    "-k",
-                    password,
-                    keychain,
-                )
-                installed.writeBytes(profile.readBytes())
-                return action(SigningIdentity(decoded.uuid, matches.single()))
+                val inputs = SigningInputs.read(config, commands, env, temp)
+                signingSession(inputs, temp, diagnostic, action)
             } finally {
-                if (previous == null) installed.deleteIfExists() else installed.writeBytes(previous)
-                try {
-                    run("security", "list-keychains", "-d", "user", "-s", *search.toTypedArray())
-                } finally {
-                    run("security", "delete-keychain", keychain)
-                }
+                temp.toFile().deleteRecursively()
             }
+        }
+
+    private fun <T> signingSession(
+        inputs: SigningInputs,
+        temp: Path,
+        diagnostic: Boolean,
+        action: (SigningIdentity) -> T,
+    ): T {
+        val identity = temp.resolve("identity.p12").apply { writeBytes(inputs.p12) }
+        val decoded = inputs.provisioningProfile
+        val keychain = temp.resolve("signing.keychain-db").toString()
+        val password = UUID.randomUUID().toString() + UUID.randomUUID()
+        val search =
+            Regex("\"([^\"]+)\"")
+                .findAll(run("security", "list-keychains", "-d", "user"))
+                .map { it.groupValues[1] }
+                .toList()
+        val installed =
+            Path.of(
+                env.getValue("HOME"),
+                "Library/MobileDevice/Provisioning Profiles",
+                "${decoded.uuid}.mobileprovision",
+            )
+        installed.parent.createDirectories()
+        val previous = if (installed.exists()) installed.readBytes() else null
+        try {
+            security("create-keychain", "-p", password, keychain)
+            run("security", "set-keychain-settings", "-lut", "21600", keychain)
+            security("unlock-keychain", "-p", password, keychain)
+            security(
+                "import",
+                identity.toString(),
+                "-k",
+                keychain,
+                "-P",
+                env.getValue("IOS_DISTRIBUTION_P12_PASSWORD"),
+                "-T",
+                "/usr/bin/codesign",
+                "-T",
+                "/usr/bin/security",
+            )
+            run(
+                "security",
+                "list-keychains",
+                "-d",
+                "user",
+                "-s",
+                keychain,
+                *search.toTypedArray(),
+            )
+            val identities = run("security", "find-identity", "-v", "-p", "codesigning", keychain)
+            val valid = distributionIdentities(identities)
+            val matches = valid.intersect(decoded.certificates)
+            if (diagnostic || matches.size != 1) {
+                val report =
+                    signingDiagnostic(
+                        decoded.certificates,
+                        valid,
+                        run("security", "find-certificate", "-a", "-Z", keychain),
+                        run("security", "find-identity", "-p", "codesigning", keychain),
+                    )
+                require(matches.size == 1) { report }
+                println(report)
+            }
+            if (diagnostic) return action(SigningIdentity(decoded.uuid, matches.single()))
+            security(
+                "set-key-partition-list",
+                "-S",
+                "apple-tool:,apple:,codesign:",
+                "-s",
+                "-k",
+                password,
+                keychain,
+            )
+            installed.writeBytes(inputs.profile)
+            return action(SigningIdentity(decoded.uuid, matches.single()))
         } finally {
-            temp.toFile().deleteRecursively()
+            if (previous == null) installed.deleteIfExists() else installed.writeBytes(previous)
+            try {
+                run("security", "list-keychains", "-d", "user", "-s", *search.toTypedArray())
+            } finally {
+                run("security", "delete-keychain", keychain)
+            }
         }
     }
 
