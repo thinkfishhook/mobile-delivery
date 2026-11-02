@@ -123,6 +123,7 @@ class GitHubIncidents(
                     is IncidentSubject.BetaCommit -> key.sha != tip
                     is IncidentSubject.AppStoreVersion,
                     is IncidentSubject.ReviewSubmission,
+                    is IncidentSubject.Credential,
                     is IncidentSubject.Hold,
                     is IncidentSubject.Receipt,
                     IncidentSubject.Audit,

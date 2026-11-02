@@ -24,6 +24,10 @@ class DeliveryTool(
         try {
             execute(mode)
         } catch (error: Exception) {
+            if (error is CredentialProblem) {
+                reportCredentialProblem(error, root, config, commands, env)
+                summaryWritten = true
+            }
             if (!summaryWritten)
                 writeSummary(
                     RunSummary(
@@ -209,7 +213,7 @@ class DeliveryTool(
     }
 
     private fun deliveryFailed(error: Exception): Nothing {
-        if (error is ReportedSweepFailure) throw error
+        if (error is ReportedSweepFailure || error is CredentialProblem) throw error
         // Red runs say why on the run page, not only in the log.
         error.displayMessage()?.let { annotate(Annotation("error", it)) }
         writeSummary(

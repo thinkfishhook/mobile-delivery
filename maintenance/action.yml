@@ -152,6 +152,7 @@ runs:
         IOS_DISTRIBUTION_P12_BASE64: ${{ inputs.distribution-p12 }}
         IOS_DISTRIBUTION_P12_PASSWORD: ${{ inputs.distribution-p12-password }}
         IOS_PROFILE_BASE64: ${{ inputs.provisioning-profile }}
+        GH_TOKEN: ${{ inputs.github-token }}
       run: mobile-delivery verifySigning
     - name: Retain maintenance evidence
       if: always() && env.DELIVERY_OPERATION != 'verify-signing'

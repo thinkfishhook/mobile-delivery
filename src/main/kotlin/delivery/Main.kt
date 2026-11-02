@@ -61,8 +61,13 @@ internal fun runTask(
         "setupAndroid" -> setupAndroid(root, config, commands, env)
         "selectXcode" -> selectXcode(config, commands, env)
         "verifySigning" ->
-            Signing(config, commands, env).withIdentity(diagnostic = true) {
-                println("Signing identity verified; no archive or upload performed.")
+            try {
+                Signing(config, commands, env).withIdentity(diagnostic = true) {
+                    println("Signing identity verified; no archive or upload performed.")
+                }
+            } catch (problem: CredentialProblem) {
+                reportCredentialProblem(problem, root, config, commands, env)
+                throw problem
             }
         "verify" ->
             try {

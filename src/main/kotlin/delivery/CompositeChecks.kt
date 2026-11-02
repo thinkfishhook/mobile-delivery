@@ -35,6 +35,7 @@ internal class CompositeChecks {
             "appStorePreflight",
             "rolloutControl",
         )
+    private val githubPhases = applePhases + "verifySigning"
     private val receiptPhases =
         setOf("uploadBeta", "finishRun", "sweep", "audit", "appStoreRelease")
     private val signingPhases = setOf("buildBeta", "verifySigning")
@@ -312,6 +313,7 @@ internal class CompositeChecks {
                 sources.forEach { source ->
                     val allowed =
                         when (source) {
+                            "github-token" -> githubPhases
                             "receipt-token" -> receiptPhases
                             "distribution-p12",
                             "distribution-p12-password",
@@ -327,7 +329,7 @@ internal class CompositeChecks {
                     }
                 }
                 if (githubCredential(value))
-                    require(phase in applePhases && key == "GH_TOKEN") {
+                    require(phase in githubPhases && key == "GH_TOKEN") {
                         "$location: GitHub credentials belong only on the permitted API phases"
                     }
             }

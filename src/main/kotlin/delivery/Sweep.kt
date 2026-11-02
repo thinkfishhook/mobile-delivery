@@ -96,6 +96,7 @@ class Sweep(
     ) =
         when (key) {
             IncidentSubject.Audit -> audit
+            is IncidentSubject.Credential -> false
             // Settled once the receipt exists or Apple no longer has a build that needs one.
             is IncidentSubject.Receipt -> {
                 "deploy/testflight/${key.version}/${key.number}" in receipts ||

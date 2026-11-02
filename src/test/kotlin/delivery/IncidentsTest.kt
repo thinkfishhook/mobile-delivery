@@ -16,6 +16,8 @@ class IncidentsTest {
                 "hold/7" to "iOS delivery needs attention: hold/7",
                 "receipt/26.09.01/234.1" to "iOS delivery needs attention: receipt/26.09.01/234.1",
                 "audit" to "iOS delivery needs attention: audit",
+                "credential/IOS_DISTRIBUTION_P12_PASSWORD" to
+                    "iOS delivery needs attention: credential/IOS_DISTRIBUTION_P12_PASSWORD",
                 "appstore" to "iOS delivery needs attention: appstore",
                 "incidents" to "iOS delivery needs attention: incidents",
                 "legacy/unknown" to "iOS delivery needs attention: legacy/unknown",
@@ -63,6 +65,7 @@ class IncidentsTest {
                 IncidentSubject.Hold(7) to true,
                 IncidentSubject.Receipt("1.0", "234.1") to true,
                 IncidentSubject.Audit to true,
+                IncidentSubject.fromKey("credential/IOS_DISTRIBUTION_P12_PASSWORD") to true,
                 IncidentSubject.AppStore to true,
                 IncidentSubject.Incidents to true,
                 IncidentSubject.Unknown("legacy") to false,

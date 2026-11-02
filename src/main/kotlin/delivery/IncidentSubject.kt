@@ -19,6 +19,7 @@ sealed interface IncidentSubject {
                 is BetaCommit -> "Beta delivery needs attention: ${sha.take(12)}"
                 is AppStoreVersion -> "App Store release needs attention: $version"
                 is ReviewSubmission -> "App Store release needs attention: review-submission-$id"
+                is Credential,
                 is Hold,
                 is Receipt,
                 Audit,
@@ -46,6 +47,12 @@ sealed interface IncidentSubject {
 
         override val key
             get() = "appstore/review-submission-$id"
+    }
+
+    data class Credential(val secret: String) : IncidentSubject {
+        override val ownerOnly = true
+        override val key
+            get() = "credential/$secret"
     }
 
     data class Hold(val issue: String) : IncidentSubject {
@@ -91,7 +98,7 @@ sealed interface IncidentSubject {
         // Decode legacy keys only at the issue-marker/serialization boundary. Domain decisions
         // use the sealed subject, never string prefixes.
         fun fromKey(key: String): IncidentSubject {
-            val match = Regex("(internal|appstore|hold|receipt)/(.*)").matchEntire(key)
+            val match = Regex("(internal|appstore|hold|receipt|credential)/(.*)").matchEntire(key)
             if (match == null)
                 return when (key) {
                     "audit" -> Audit
@@ -107,6 +114,7 @@ sealed interface IncidentSubject {
                     if (review == null) AppStoreVersion(value)
                     else ReviewSubmission(review.groupValues[1])
                 }
+                "credential" -> Credential(value)
                 "hold" -> Hold(value)
                 "receipt" -> {
                     val parts = value.split('/')

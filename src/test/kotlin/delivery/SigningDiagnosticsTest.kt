@@ -94,8 +94,9 @@ class SigningDiagnosticsTest {
                             commands,
                             mapOf(
                                 "HOME" to home.toString(),
-                                "IOS_DISTRIBUTION_P12_BASE64" to "AQID",
-                                "IOS_DISTRIBUTION_P12_PASSWORD" to "secret",
+                                "IOS_DISTRIBUTION_P12_BASE64" to
+                                    java.util.Base64.getEncoder().encodeToString(syntheticP12),
+                                "IOS_DISTRIBUTION_P12_PASSWORD" to p12Password,
                                 "IOS_PROFILE_BASE64" to "AQID",
                                 "GH_TOKEN" to "job-secret",
                             ),

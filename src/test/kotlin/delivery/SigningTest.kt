@@ -223,8 +223,9 @@ class SigningTest {
     private fun signingEnv(home: java.nio.file.Path) =
         mapOf(
             "HOME" to home.toString(),
-            "IOS_DISTRIBUTION_P12_BASE64" to "BAUG",
-            "IOS_DISTRIBUTION_P12_PASSWORD" to "fixture-password",
+            "IOS_DISTRIBUTION_P12_BASE64" to
+                java.util.Base64.getEncoder().encodeToString(syntheticP12),
+            "IOS_DISTRIBUTION_P12_PASSWORD" to p12Password,
             "IOS_PROFILE_BASE64" to "AQID",
         )
 
@@ -269,7 +270,7 @@ class SigningTest {
                         assertContentEquals(byteArrayOf(1, 2, 3), installed.readBytes())
                         val cmsProfile = Path(commands.calls.first().args.last())
                         assertContentEquals(
-                            byteArrayOf(4, 5, 6),
+                            syntheticP12,
                             cmsProfile.resolveSibling("identity.p12").readBytes(),
                         )
                         check(!failAction) { "archive failure" }
@@ -396,7 +397,7 @@ class SigningTest {
         temp { home ->
             val commands = signingCommands()
             val inputs = SigningInputs.read(config, commands, signingEnv(home), home)
-            assertContentEquals(byteArrayOf(4, 5, 6), inputs.p12)
+            assertContentEquals(syntheticP12, inputs.p12)
             assertContentEquals(byteArrayOf(1, 2, 3), inputs.profile)
             assertEquals("test-profile", inputs.plist.string("UUID"))
             assertEquals("test-profile", inputs.provisioningProfile.uuid)
