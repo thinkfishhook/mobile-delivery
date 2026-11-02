@@ -113,6 +113,10 @@ class DeliveryTool(
             appStore(mode, event, appStore, symbols)
             return
         }
+        if (mode == "startRun") {
+            startRun(event, StartRun(config, source, github, env, branch), beta)
+            return
+        }
         val selected = (event.inputs?.sha?.takeIf { it.isNotBlank() } ?: env.getValue("GITHUB_SHA"))
         require(Regex("[a-f0-9]{40}").matches(selected)) { "Select an exact full commit SHA" }
         val resolved = source.git("rev-parse", "$selected^{commit}")
@@ -121,28 +125,11 @@ class DeliveryTool(
         }
         source.git("merge-base", "--is-ancestor", config.baseline, selected)
         source.git("merge-base", "--is-ancestor", selected, "origin/${branch}")
-        val pushStart = mode == "startRun" && env["GITHUB_EVENT_NAME"] == "push"
-        // checkout can reset origin/branch to a queued event's commit even after the branch moves.
         val healthTip =
             when {
                 mode in setOf("sweep", "audit", "finishRun") -> source.refreshBranchTip(env)
-                pushStart -> github.currentBranchTip(branch)
                 else -> source.git("rev-parse", "origin/${branch}")
             }
-        // A queued push that the branch has moved past is dropped before any record or Apple work.
-        // Explicit dispatches may still select older SHAs.
-        if (pushStart && selected != healthTip) {
-            outputs("operation=none\n")
-            writeSummary(
-                RunSummary(
-                    "completed",
-                    "internal/$selected: superseded by $healthTip",
-                    emptyList(),
-                    emptyList(),
-                )
-            )
-            return
-        }
         val sweep =
             Sweep(
                 config,
@@ -158,15 +145,6 @@ class DeliveryTool(
         val output = root.resolve("build/delivery").createDirectories()
         try {
             when (mode) {
-                "startRun" -> {
-                    when (val decision = beta.start(intent(event, selected))) {
-                        is StartDecision.Deliver -> outputs("operation=deliver\nsha=$selected\n")
-                        StartDecision.AlreadyDelivered ->
-                            outputs("operation=sweep\nsha=$selected\n")
-                        StartDecision.SweepOnly -> outputs("operation=sweep\nsha=$selected\n")
-                        is StartDecision.Refused -> error(decision.reason)
-                    }
-                }
                 "buildBeta" -> {
                     require(env["IOS_DELIVERY_ENABLED"] == "true") { "Delivery disabled" }
                     val operation = intent(event, selected)
@@ -202,21 +180,56 @@ class DeliveryTool(
                 else -> error("Unsupported delivery task: $mode")
             }
         } catch (error: Exception) {
-            if (error is ReportedSweepFailure) throw error
-            // Red runs say why on the run page, not only in the log.
-            error.displayMessage()?.let { annotate(Annotation("error", it)) }
-            writeSummary(
-                RunSummary(
-                    "failed",
-                    "See the run evidence",
-                    listOfNotNull(error.displayMessage()),
-                    emptyList(),
-                    testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
-                    failingCommand = (error as? VerificationFailure)?.failingCommand,
-                )
-            )
-            throw error
+            deliveryFailed(error)
         }
+    }
+
+    private fun startRun(event: WorkflowEvent, start: StartRun, beta: BetaDelivery) {
+        when (val selection = start.select(event)) {
+            is StartRunSelection.Superseded -> {
+                outputs("operation=none\n")
+                writeSummary(
+                    RunSummary(
+                        "completed",
+                        "internal/${selection.sha}: superseded by ${selection.tip}",
+                        emptyList(),
+                        emptyList(),
+                    )
+                )
+            }
+            is StartRunSelection.Proceed -> {
+                val selected = selection.sha
+                root.resolve("build/delivery").createDirectories()
+                try {
+                    when (val decision = beta.start(intent(event, selected))) {
+                        is StartDecision.Deliver -> outputs("operation=deliver\nsha=$selected\n")
+                        StartDecision.AlreadyDelivered ->
+                            outputs("operation=sweep\nsha=$selected\n")
+                        StartDecision.SweepOnly -> outputs("operation=sweep\nsha=$selected\n")
+                        is StartDecision.Refused -> error(decision.reason)
+                    }
+                } catch (error: Exception) {
+                    deliveryFailed(error)
+                }
+            }
+        }
+    }
+
+    private fun deliveryFailed(error: Exception): Nothing {
+        if (error is ReportedSweepFailure) throw error
+        // Red runs say why on the run page, not only in the log.
+        error.displayMessage()?.let { annotate(Annotation("error", it)) }
+        writeSummary(
+            RunSummary(
+                "failed",
+                "See the run evidence",
+                listOfNotNull(error.displayMessage()),
+                emptyList(),
+                testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
+                failingCommand = (error as? VerificationFailure)?.failingCommand,
+            )
+        )
+        throw error
     }
 
     private fun appStore(
