@@ -4,7 +4,10 @@ import java.io.IOException
 import java.nio.file.Path
 import java.security.KeyStore
 import java.security.UnrecoverableKeyException
+import java.security.cert.X509Certificate
+import java.time.Instant
 import java.util.Base64
+import javax.naming.ldap.LdapName
 import kotlin.io.path.*
 
 // Keep raw credentials in memory/private temporary files, without generated value logging.
@@ -48,8 +51,9 @@ private constructor(
             // an ASN.1 SEQUENCE; reject other keystore formats before that fallback.
             if (p12.firstOrNull() != 0x30.toByte()) throw invalidP12()
             val password = env.getValue(names[1]).toCharArray()
+            val store = KeyStore.getInstance("PKCS12")
             try {
-                KeyStore.getInstance("PKCS12").load(p12.inputStream(), password)
+                store.load(p12.inputStream(), password)
             } catch (error: IOException) {
                 if (error.cause is UnrecoverableKeyException) {
                     throw CredentialProblem(
@@ -62,6 +66,42 @@ private constructor(
             } finally {
                 password.fill('\u0000')
             }
+            val now = Instant.now()
+            // Only leaf certificates for identities are used for signing; chain certificates
+            // may have different validity windows and are diagnosed by macOS trust checks.
+            store
+                .aliases()
+                .asSequence()
+                .filter { store.isKeyEntry(it) }
+                .forEach { alias ->
+                    val certificate =
+                        store.getCertificate(alias) as? X509Certificate ?: return@forEach
+                    val state =
+                        when {
+                            now.isAfter(certificate.notAfter.toInstant()) ->
+                                "expired on ${certificate.notAfter.toInstant()}"
+                            now.isBefore(certificate.notBefore.toInstant()) ->
+                                "is not valid until ${certificate.notBefore.toInstant()}"
+                            else -> null
+                        }
+                    if (state != null) {
+                        val name =
+                            LdapName(certificate.subjectX500Principal.name)
+                                .rdns
+                                .firstOrNull { it.type.equals("CN", ignoreCase = true) }
+                                ?.value
+                                ?.toString()
+                                .orEmpty()
+                                .replace(Regex("[\\p{Cntrl}]"), " ")
+                                .replace("\"", "'")
+                        throw CredentialProblem(
+                            names[0],
+                            "IOS_DISTRIBUTION_P12_BASE64: the distribution certificate \"$name\" $state.",
+                            "Renew it in Apple Developer → Certificates, then run:\n" +
+                                "base64 < distribution.p12 | tr -d '\\n' | gh secret set IOS_DISTRIBUTION_P12_BASE64 --env ios-delivery",
+                        )
+                    }
+                }
             val profile = Base64.getDecoder().decode(env.getValue(names[2]))
             val file = temp.resolve("app.mobileprovision").apply { writeBytes(profile) }
             val plist =

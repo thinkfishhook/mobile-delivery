@@ -11,14 +11,17 @@ import kotlinx.serialization.json.*
 import org.junit.Test
 
 internal const val p12Password = "synthetic-p12-password"
-internal val syntheticP12: ByteArray by lazy {
+internal val syntheticP12: ByteArray by lazy { generateP12() }
+
+internal fun generateP12(startDate: String? = null): ByteArray {
     val directory = createTempDirectory("synthetic-p12-")
     try {
         val file = directory.resolve("test.p12")
         ProcessCommands()
             .run(
-                listOf(
+                listOfNotNull(
                     Path.of(System.getProperty("java.home"), "bin/keytool").toString(),
+                    "-J-Duser.timezone=UTC",
                     "-genkeypair",
                     "-alias",
                     "fixture",
@@ -30,6 +33,7 @@ internal val syntheticP12: ByteArray by lazy {
                     "CN=Synthetic Test",
                     "-validity",
                     "1",
+                    *if (startDate == null) emptyArray() else arrayOf("-startdate", startDate),
                     "-storetype",
                     "PKCS12",
                     "-keystore",
@@ -38,7 +42,7 @@ internal val syntheticP12: ByteArray by lazy {
                     p12Password,
                 )
             )
-        file.readBytes()
+        return file.readBytes()
     } finally {
         directory.toFile().deleteRecursively()
     }
@@ -106,18 +110,57 @@ class CredentialProblemTest {
         }
     }
 
-    private fun checkReportedFailure(value: String, password: String) = temp { root ->
-        val secret =
-            if (password == "wrong-password") "IOS_DISTRIBUTION_P12_PASSWORD"
-            else "IOS_DISTRIBUTION_P12_BASE64"
-        val expected =
+    @Test
+    fun `certificate validity fails before commands and verify signing reports the owner fix`() {
+        for ((start, state, date) in
+            listOf(
+                Triple("2000/01/01 00:00:00", "expired on", "2000-01-02T00:00:00Z"),
+                Triple("2099/01/01 00:00:00", "is not valid until", "2099-01-01T00:00:00Z"),
+            )) {
+            val encoded = Base64.getEncoder().encodeToString(generateP12(start))
+            val expected =
+                "IOS_DISTRIBUTION_P12_BASE64: the distribution certificate \"Synthetic Test\" $state $date.\n" +
+                    "Renew it in Apple Developer → Certificates, then run:\n" +
+                    "base64 < distribution.p12 | tr -d '\\n' | gh secret set IOS_DISTRIBUTION_P12_BASE64 --env ios-delivery"
+            temp { root ->
+                val commands = RecordingCommands()
+                val failure =
+                    assertFailsWith<CredentialProblem> {
+                        SigningInputs.read(
+                            config,
+                            commands,
+                            mapOf(
+                                "IOS_DISTRIBUTION_P12_BASE64" to encoded,
+                                "IOS_DISTRIBUTION_P12_PASSWORD" to p12Password,
+                                "IOS_PROFILE_BASE64" to "AQID",
+                            ),
+                            root,
+                        )
+                    }
+                assertEquals(expected, failure.message)
+                assertTrue(commands.calls.isEmpty())
+                assertFalse(failure.toString().contains(encoded))
+                assertFalse(failure.toString().contains(p12Password))
+            }
+            checkReportedFailure(encoded, p12Password, expected)
+        }
+    }
+
+    private fun checkReportedFailure(
+        value: String,
+        password: String,
+        expected: String =
             if (password == "wrong-password") {
                 "IOS_DISTRIBUTION_P12_PASSWORD doesn't open IOS_DISTRIBUTION_P12_BASE64\n" +
                     "gh secret set IOS_DISTRIBUTION_P12_PASSWORD --env ios-delivery"
             } else {
                 "IOS_DISTRIBUTION_P12_BASE64 is not a base64 PKCS#12 export\n" +
                     "base64 < distribution.p12 | tr -d '\\n' | gh secret set IOS_DISTRIBUTION_P12_BASE64 --env ios-delivery"
-            }
+            },
+    ) = temp { root ->
+        val secret =
+            if (password == "wrong-password") "IOS_DISTRIBUTION_P12_PASSWORD"
+            else "IOS_DISTRIBUTION_P12_BASE64"
         root
             .resolve(".github")
             .createDirectories()
@@ -211,7 +254,8 @@ class CredentialProblemTest {
         assertContains(summary.readText(), secret)
         val allOutput =
             output.toString() + summary.readText() + issue + commands.calls.joinToString()
-        for (sensitive in listOf("wrong-password", p12Password, encoded, "BEGIN PRIVATE KEY")) {
+        for (sensitive in
+            listOf("wrong-password", p12Password, encoded, value, "BEGIN PRIVATE KEY")) {
             assertFalse(sensitive in allOutput, "Credential material escaped")
         }
     }
