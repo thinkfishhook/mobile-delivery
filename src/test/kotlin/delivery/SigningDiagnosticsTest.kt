@@ -51,14 +51,14 @@ class SigningDiagnosticsTest {
     @Test
     fun `signing restores keychain and profile on success and rejection without exposing passwords`() =
         temp { home ->
-            val fingerprint = digest(byteArrayOf(1, 2, 3), "SHA-1").uppercase()
+            val fingerprint = digest(syntheticCertificate, "SHA-1").uppercase()
             val xml =
                 """<plist><dict>
             <key>TeamIdentifier</key><array><string>${config.teamId}</string></array>
             <key>Entitlements</key><dict><key>application-identifier</key><string>${config.teamId}.${config.bundleId}</string></dict>
             <key>ExpirationDate</key><date>2099-01-01T00:00:00Z</date>
             <key>UUID</key><string>diagnostic-profile</string>
-            <key>DeveloperCertificates</key><array><data>AQID</data></array>
+            <key>DeveloperCertificates</key><array><data>$profileCertificateData</data></array>
             </dict></plist>"""
             listOf(
                     Triple(true, true, false),

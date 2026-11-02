@@ -217,7 +217,7 @@ class SigningTest {
         <key>Entitlements</key><dict><key>application-identifier</key><string>${config.teamId}.${config.bundleId}</string></dict>
         <key>ExpirationDate</key><date>2099-01-01T00:00:00Z</date>
         <key>UUID</key><string>test-profile</string>
-        <key>DeveloperCertificates</key><array><data>AQID</data></array>
+        <key>DeveloperCertificates</key><array><data>$profileCertificateData</data></array>
         </dict></plist>"""
 
     private fun signingEnv(home: java.nio.file.Path) =
@@ -244,7 +244,7 @@ class SigningTest {
                         "list-keychains" ->
                             "\"/original/login.keychain-db\" \"/original/other.keychain-db\""
                         "find-identity" ->
-                            "1) ${digest(byteArrayOf(1, 2, 3), "SHA-1").uppercase()} \"Apple Distribution: fixture\""
+                            "1) ${digest(syntheticCertificate, "SHA-1").uppercase()} \"Apple Distribution: fixture\""
                         else -> ""
                     },
                     "",
@@ -373,9 +373,10 @@ class SigningTest {
     fun `invalid profiles retain policy error without keychain commands`() = temp { home ->
         for ((xml, message) in
             listOf(
-                profileXml.replace("2099-01-01", "2020-01-01") to "Provisioning profile expired",
+                profileXml.replace("2099-01-01", "2020-01-01") to
+                    "IOS_PROFILE_BASE64: provisioning profile \"test-profile\" expired on 2020-01-01T00:00:00Z.\n$profileFix",
                 profileXml.replace(config.bundleId, "wrong.app") to
-                    "A manually managed App Store profile must match this app and team",
+                    "IOS_PROFILE_BASE64: application identifier: expected ${config.teamId}.${config.bundleId}; actual ${config.teamId}.wrong.app.\n$profileFix",
             )) {
             for (diagnostic in listOf(false, true)) {
                 val commands = signingCommands(xml)
@@ -402,7 +403,7 @@ class SigningTest {
             assertEquals("test-profile", inputs.plist.string("UUID"))
             assertEquals("test-profile", inputs.provisioningProfile.uuid)
             assertEquals(
-                setOf(digest(byteArrayOf(1, 2, 3), "SHA-1").uppercase()),
+                setOf(digest(syntheticCertificate, "SHA-1").uppercase()),
                 inputs.provisioningProfile.certificates,
             )
             assertEquals(listOf("cms"), commands.calls.map(::operation))
@@ -420,7 +421,7 @@ class SigningTest {
             }
             val commands = signingCommands(profileXml.replace("2099-01-01", "2020-01-01"))
             assertEquals(
-                "Provisioning profile expired",
+                "IOS_PROFILE_BASE64: provisioning profile \"test-profile\" expired on 2020-01-01T00:00:00Z.\n$profileFix",
                 assertFailsWith<IllegalArgumentException> {
                         SigningInputs.read(config, commands, signingEnv(home), home)
                     }

@@ -146,6 +146,14 @@ class CredentialProblemTest {
         }
     }
 
+    @Test
+    fun `verify signing reports every profile fixture through the shared owner credential path`() {
+        val encoded = Base64.getEncoder().encodeToString(syntheticP12)
+        for ((xml, description) in invalidProfileFixtures()) {
+            checkReportedFailure(encoded, p12Password, "$description\n$profileFix", xml)
+        }
+    }
+
     private fun checkReportedFailure(
         value: String,
         password: String,
@@ -157,9 +165,11 @@ class CredentialProblemTest {
                 "IOS_DISTRIBUTION_P12_BASE64 is not a base64 PKCS#12 export\n" +
                     "base64 < distribution.p12 | tr -d '\\n' | gh secret set IOS_DISTRIBUTION_P12_BASE64 --env ios-delivery"
             },
+        profileXml: String? = null,
     ) = temp { root ->
         val secret =
-            if (password == "wrong-password") "IOS_DISTRIBUTION_P12_PASSWORD"
+            if (profileXml != null) "IOS_PROFILE_BASE64"
+            else if (password == "wrong-password") "IOS_DISTRIBUTION_P12_PASSWORD"
             else "IOS_DISTRIBUTION_P12_BASE64"
         root
             .resolve(".github")
@@ -173,32 +183,38 @@ class CredentialProblemTest {
         val commands =
             RecordingCommands().apply {
                 respond = { call ->
-                    assertEquals("gh", call.args.first(), "No security commands may run")
-                    val path = call.args[2].substringAfter("repos/owner/repo/")
-                    val response =
-                        when {
-                            path.startsWith("labels/") -> "{}"
-                            path.startsWith("issues?") -> JsonArray(listOfNotNull(issue)).toString()
-                            path == "issues" -> {
-                                creates++
-                                issue =
-                                    JsonObject(
-                                        json.parseToJsonElement(call.input!!).jsonObject +
-                                            ("number" to JsonPrimitive(1))
-                                    )
-                                issue.toString()
+                    if (call.args.take(2) == listOf("security", "cms") && profileXml != null) {
+                        CommandResult(0, profileXml, "")
+                    } else {
+                        assertEquals("gh", call.args.first(), "No keychain commands may run")
+                        val path = call.args[2].substringAfter("repos/owner/repo/")
+                        val response =
+                            when {
+                                path.startsWith("labels/") -> "{}"
+                                path.startsWith("issues?") ->
+                                    JsonArray(listOfNotNull(issue)).toString()
+                                path == "issues" -> {
+                                    creates++
+                                    issue =
+                                        JsonObject(
+                                            json.parseToJsonElement(call.input!!).jsonObject +
+                                                ("number" to JsonPrimitive(1))
+                                        )
+                                    issue.toString()
+                                }
+                                path == "issues/1" -> {
+                                    updates++
+                                    issue =
+                                        JsonObject(
+                                            issue!! +
+                                                json.parseToJsonElement(call.input!!).jsonObject
+                                        )
+                                    issue.toString()
+                                }
+                                else -> error("Unexpected API $path")
                             }
-                            path == "issues/1" -> {
-                                updates++
-                                issue =
-                                    JsonObject(
-                                        issue!! + json.parseToJsonElement(call.input!!).jsonObject
-                                    )
-                                issue.toString()
-                            }
-                            else -> error("Unexpected API $path")
-                        }
-                    CommandResult(0, response, "")
+                        CommandResult(0, response, "")
+                    }
                 }
             }
         val encoded = Base64.getEncoder().encodeToString(syntheticP12)
@@ -255,7 +271,15 @@ class CredentialProblemTest {
         val allOutput =
             output.toString() + summary.readText() + issue + commands.calls.joinToString()
         for (sensitive in
-            listOf("wrong-password", p12Password, encoded, value, "BEGIN PRIVATE KEY")) {
+            listOf(
+                "wrong-password",
+                p12Password,
+                encoded,
+                value,
+                profileCertificateData,
+                syntheticPrivateKeyData,
+                "BEGIN PRIVATE KEY",
+            )) {
             assertFalse(sensitive in allOutput, "Credential material escaped")
         }
     }

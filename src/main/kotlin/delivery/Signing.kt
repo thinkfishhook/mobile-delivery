@@ -26,29 +26,50 @@ fun validateProfile(
     profile: PlistDict,
     config: DeliveryConfig,
     now: Instant = Instant.now(),
+    identityCertificates: Set<String>? = null,
 ): ProvisioningProfile {
+    fun problem(description: String): Nothing =
+        throw CredentialProblem(
+            "IOS_PROFILE_BASE64",
+            "IOS_PROFILE_BASE64: $description",
+            "Renew it in Apple Developer → Profiles, then run:\n" +
+                "base64 < App.mobileprovision | tr -d '\\n' | gh secret set IOS_PROFILE_BASE64 --env ios-delivery",
+        )
+    fun safe(value: String) = value.replace(Regex("[\\p{Cntrl}]"), " ").replace("\"", "'")
+    val expiry = (profile.values.getValue("ExpirationDate") as PlistDate).value
+    if (expiry <= now)
+        problem(
+            "provisioning profile \"${safe((profile.values["Name"] as? PlistString)?.value ?: profile.string("UUID"))}\" expired on $expiry."
+        )
     val entitlements = profile.dict("Entitlements")
-    require(
-        profile.array("TeamIdentifier") == listOf(PlistString(config.teamId)) &&
-            entitlements.string("application-identifier") ==
-                "${config.teamId}.${config.bundleId}" &&
-            !entitlements.bool("get-task-allow") &&
-            "ProvisionedDevices" !in profile.values &&
-            !profile.bool("ProvisionsAllDevices") &&
-            !profile.bool("IsXcodeManaged")
+    val teams = profile.array("TeamIdentifier").map { (it as PlistString).value }
+    if (teams != listOf(config.teamId)) {
+        problem("team: expected ${config.teamId}; actual ${safe(teams.joinToString())}.")
+    }
+    val application = entitlements.string("application-identifier")
+    val expected = "${config.teamId}.${config.bundleId}"
+    if (application != expected) {
+        problem("application identifier: expected $expected; actual ${safe(application)}.")
+    }
+    if (
+        entitlements.bool("get-task-allow") ||
+            "ProvisionedDevices" in profile.values ||
+            profile.bool("ProvisionsAllDevices") ||
+            profile.bool("IsXcodeManaged")
     ) {
-        "A manually managed App Store profile must match this app and team"
+        problem("must be a manually managed App Store profile.")
     }
-    require((profile.values.getValue("ExpirationDate") as PlistDate).value > now) {
-        "Provisioning profile expired"
-    }
-    return ProvisioningProfile(
-        profile.string("UUID"),
+    val certificates =
         profile
             .array("DeveloperCertificates")
             .map { digest((it as PlistData).value, "SHA-1").uppercase() }
-            .toSet(),
-    )
+            .toSet()
+    if (identityCertificates != null && certificates.intersect(identityCertificates).isEmpty()) {
+        problem(
+            "contains no certificate from IOS_DISTRIBUTION_P12_BASE64. Profile certificate SHA-1: ${certificates.sorted().joinToString().ifEmpty { "none" }}; P12 identity certificate SHA-1: ${identityCertificates.sorted().joinToString().ifEmpty { "none" }}."
+        )
+    }
+    return ProvisioningProfile(profile.string("UUID"), certificates)
 }
 
 fun sourceCompilationFailed(log: String) =

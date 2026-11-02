@@ -111,7 +111,20 @@ private constructor(
                         env = buildEnvironment(env),
                     )
                 )
-            return SigningInputs(p12, profile, plist, validateProfile(plist, config))
+            val identities =
+                store
+                    .aliases()
+                    .asSequence()
+                    .filter { store.isKeyEntry(it) }
+                    .mapNotNull { store.getCertificate(it) as? X509Certificate }
+                    .map { digest(it.encoded, "SHA-1").uppercase() }
+                    .toSet()
+            return SigningInputs(
+                p12,
+                profile,
+                plist,
+                validateProfile(plist, config, now, identities),
+            )
         }
     }
 }
