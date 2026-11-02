@@ -23,6 +23,8 @@ class WorkflowChecks {
                                     "./app-store-release",
                                     "./app-store-rollout",
                                 )
+                        if (localComposite)
+                            CompositeChecks().validateCaller(root, file, name.toString(), action)
                         require(localComposite || Regex("[\\w./-]+@[a-f0-9]{40}").matches(action)) {
                             "$file: $action is not pinned to a full commit SHA"
                         }

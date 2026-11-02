@@ -146,6 +146,27 @@ internal class CompositeChecks {
         }
     }
 
+    // Validate the caller, rather than maintaining a second copy of the permission contract.
+    fun validateCaller(root: Path, file: String, job: String, action: String) {
+        val mode =
+            mapOf(
+                    "testflight" to "delivery",
+                    "maintenance" to "maintenance",
+                    "app-store-release" to "release",
+                    "app-store-rollout" to "rollout",
+                )
+                .getValue(action.removePrefix("./"))
+        JobPolicy(
+                mapOf(
+                    "GITHUB_WORKFLOW_REF" to
+                        "local/repository/.github/workflows/$file@refs/heads/trunk",
+                    "GITHUB_JOB" to job,
+                    "DELIVERY_VALIDATION_MODE" to mode,
+                )
+            )
+            .validate(root)
+    }
+
     private fun artifact(step: Map<*, *>) =
         step["uses"].toString().startsWith("actions/upload-artifact@")
 

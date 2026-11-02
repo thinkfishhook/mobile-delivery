@@ -8,7 +8,7 @@ import kotlin.test.*
 import org.junit.Test
 
 class JobPolicyTest {
-    private val minimum = "{ contents: read, actions: read, issues: write }"
+    private val minimum = "{ contents: read, actions: write, issues: write }"
     private val lock = "{ group: ios-delivery, queue: max, cancel-in-progress: false }"
 
     private fun run(
@@ -57,6 +57,44 @@ class JobPolicyTest {
     }
 
     @Test
+    fun `TestFlight actions read is rejected with actions write correction`() = temp { root ->
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                run(root, permissions = "{ contents: read, actions: read, issues: write }")
+            }
+        assertContains(
+            failure.message.orEmpty(),
+            "permissions: { contents: read, actions: write, issues: write }",
+        )
+    }
+
+    @Test
+    fun `TestFlight actions write is accepted without a broader permission warning`() =
+        temp { root ->
+            assertEquals(
+                "",
+                run(root, permissions = "{ contents: read, actions: write, issues: write }"),
+            )
+        }
+
+    @Test
+    fun `maintenance actions write is rejected as broader than needed`() = temp { root ->
+        val failure =
+            assertFailsWith<IllegalArgumentException> {
+                run(
+                    root,
+                    permissions = "{ contents: read, actions: write, issues: write }",
+                    mode = "maintenance",
+                )
+            }
+        assertContains(failure.message.orEmpty(), "broader than this action needs")
+        assertContains(
+            failure.message.orEmpty(),
+            "permissions: { contents: read, actions: read, issues: write }",
+        )
+    }
+
+    @Test
     fun `missing and unsafe queues name the caller and give the exact lock to paste`() =
         temp { root ->
             for (concurrency in
@@ -76,28 +114,28 @@ class JobPolicyTest {
         }
 
     @Test
-    fun `missing permissions fail and broader permissions warn with a paste-ready minimum`() =
-        temp { root ->
-            for (permissions in
-                listOf("{}", "{ contents: read, actions: read, issues: read }", "read-all")) {
-                val failure =
-                    assertFailsWith<IllegalArgumentException> {
-                        run(root, permissions = permissions)
-                    }
-                assertContains(failure.message.orEmpty(), ".github/workflows/caller.yml job ship")
-                assertContains(failure.message.orEmpty(), "permissions: $minimum")
-            }
-            for (permissions in
-                listOf(
-                    "{ contents: write, actions: read, issues: write, packages: write }",
-                    "write-all",
-                )) {
-                val warning = run(root, permissions = permissions)
-                assertContains(warning, "::warning::")
-                assertContains(warning, ".github/workflows/caller.yml job ship")
-                assertContains(warning, "permissions: $minimum")
-            }
+    fun `missing and broader permissions fail with a paste-ready minimum`() = temp { root ->
+        for (permissions in
+            listOf("{}", "{ contents: read, actions: read, issues: read }", "read-all")) {
+            val failure =
+                assertFailsWith<IllegalArgumentException> {
+                    run(root, permissions = permissions)
+                }
+            assertContains(failure.message.orEmpty(), ".github/workflows/caller.yml job ship")
+            assertContains(failure.message.orEmpty(), "permissions: $minimum")
         }
+        for (permissions in
+            listOf(
+                "{ contents: write, actions: write, issues: write, packages: write }",
+                "write-all",
+            )) {
+            val failure =
+                assertFailsWith<IllegalArgumentException> { run(root, permissions = permissions) }
+            assertContains(failure.message.orEmpty(), "broader than this action needs")
+            assertContains(failure.message.orEmpty(), ".github/workflows/caller.yml job ship")
+            assertContains(failure.message.orEmpty(), "permissions: $minimum")
+        }
+    }
 
     @Test
     fun `runner syntax and additional caller steps do not change the policy`() = temp { root ->
@@ -147,6 +185,13 @@ class JobPolicyTest {
             assertFailsWith<IllegalArgumentException> {
                 run(root, permissions = "{ contents: read }", mode = "rollout")
             }
-            assertEquals("", run(root, mode = "maintenance"))
+            assertEquals(
+                "",
+                run(
+                    root,
+                    permissions = "{ contents: read, actions: read, issues: write }",
+                    mode = "maintenance",
+                ),
+            )
         }
 }

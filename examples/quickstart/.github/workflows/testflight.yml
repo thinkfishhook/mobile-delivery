@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 330
     environment: ios-delivery
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
-    permissions: { contents: read, actions: read, issues: write }
+    permissions: { contents: read, actions: write, issues: write }
     steps:
       - uses: thinkfishhook/mobile-delivery/testflight@59493895f8fb17bafc70ec5c15adff3726afe547 # v1 preview (unreleased)
         # CHANGE ME: if the app needs build secrets, add their names to build_environment.

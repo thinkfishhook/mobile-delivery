@@ -35,7 +35,7 @@ class JobPolicy(private val env: Map<String, String>) {
         }
         val minimum = linkedMapOf("contents" to "read")
         if (mode != "rollout") {
-            minimum["actions"] = "read"
+            minimum["actions"] = if (mode == "delivery") "write" else "read"
             minimum["issues"] = if (mode == "release") "read" else "write"
         }
         val paste =
@@ -57,18 +57,13 @@ class JobPolicy(private val env: Map<String, String>) {
         ) {
             "$caller: required permissions are missing. Add:\n    $paste"
         }
-        if (
-            effective in setOf("read-all", "write-all") ||
-                permissions.any { (scope, level) ->
+        require(
+            effective !in setOf("read-all", "write-all") &&
+                permissions.none { (scope, level) ->
                     (levels[level] ?: 0) > (levels[minimum[scope]] ?: 0)
                 }
         ) {
-            annotate(
-                Annotation(
-                    "warning",
-                    "$caller: permissions are broader than this action needs. Use:\n    $paste",
-                )
-            )
+            "$caller: permissions are broader than this action needs. Use:\n    $paste"
         }
     }
 }

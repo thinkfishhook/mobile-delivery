@@ -275,6 +275,43 @@ class WorkflowChecksTest {
         }
 
     @Test
+    fun `local TestFlight callers require the write grant and reject broader scopes`() =
+        temp { root ->
+            copyComposites(root)
+            val file = root.resolve(".github/workflows/caller.yml")
+            file.parent.createDirectories()
+            val minimum = "{ contents: read, actions: write, issues: write }"
+            for (permissions in
+                listOf(
+                    minimum,
+                    minimum.replace("actions: write", "actions: read"),
+                    minimum.replace("contents: read", "contents: write"),
+                )) {
+                file.writeText(
+                    """
+                on: workflow_dispatch
+                jobs:
+                  ship:
+                    runs-on: ubuntu-latest
+                    permissions: $permissions
+                    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+                    steps:
+                      - uses: ./testflight
+            """
+                        .trimIndent()
+                )
+                if (permissions == minimum) WorkflowChecks().validate(root)
+                else {
+                    val failure =
+                        assertFailsWith<IllegalArgumentException> {
+                            WorkflowChecks().validate(root)
+                        }
+                    assertContains(failure.message.orEmpty(), "permissions: $minimum")
+                }
+            }
+        }
+
+    @Test
     fun `CI checks retain pinned actions scoped values and unpersisted checkout`() = temp { root ->
         copyComposites(root)
         val original =

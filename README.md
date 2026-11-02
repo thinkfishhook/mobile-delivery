@@ -128,7 +128,11 @@ bootstrap; the composites install and cache their engine automatically.
 | Setting | Where it belongs |
 | --- | --- |
 | Delivery branch | Each composite's `with: branch` and the TestFlight push filter |
-| Runner, environment, permissions, concurrency, timeout | Caller job |
+| Runner, environment, concurrency, timeout | Caller job |
+| TestFlight permissions | Caller job: `permissions: { contents: read, actions: write, issues: write }` |
+| Maintenance permissions | Caller job: `permissions: { contents: read, actions: read, issues: write }` |
+| App Store release permissions | Caller job: `permissions: { contents: read, actions: read, issues: read }` |
+| Rollout permissions | Caller job: `permissions: { contents: read }` |
 | Operation, SHA, retry evidence, reason, rollout | Dispatch form forwarded as `dispatch: ${{ toJSON(inputs) }}` |
 | Push filters, schedule/time zone, dispatch form, run title | Caller workflow |
 | App IDs, team, internal group, baseline, Xcode, verification and notes | `.github/delivery.json` |
@@ -137,6 +141,9 @@ bootstrap; the composites install and cache their engine automatically.
 | Deployment switches | Repository or `ios-delivery` environment variables |
 | App build environment names | `build_environment` in JSON; existing values bound in the TestFlight step's `env:` |
 | Apple, signing, receipt and app credentials | `ios-delivery` environment secrets, individually bound by the caller |
+
+TestFlight needs `actions: write` so a superseded run can cancel itself. The caller policy
+rejects missing or broader grants and prints the exact permissions line to paste.
 
 Caller filenames are up to each app. Queue discovery reads each run's exact workflow
 revision and recognizes the pinned composite. The four copy-in callers are in
