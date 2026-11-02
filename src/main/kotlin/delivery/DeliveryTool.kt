@@ -228,12 +228,8 @@ class DeliveryTool(
             return
         RedStreaks(github, config.incidentMarker)
             .sync(
-                renderRedStreak(
-                    sha,
-                    source.git("log", "-1", "--format=%s", sha),
-                    workflowUrl(env),
-                    summary.failures,
-                )
+                RedStreakCommit(sha, source.git("log", "-1", "--format=%s", sha), workflowUrl(env)),
+                summary.failures,
             )
     }
 

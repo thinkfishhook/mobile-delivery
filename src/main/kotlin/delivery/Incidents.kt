@@ -26,8 +26,9 @@ class GitHubIncidents(
     private val owner: String,
     private val branch: String,
 ) : Incidents {
-    private val start = "<!-- $owner-status:start -->"
-    private val end = "<!-- $owner-status:end -->"
+    private val status = OwnedStatusBlock(owner)
+    private val start = status.start
+    private val end = status.end
 
     private fun marker(subject: IncidentSubject) = "<!-- $owner:${subject.key} -->"
 
@@ -49,18 +50,6 @@ class GitHubIncidents(
                 require(issues.size == 1) { "Duplicate owned incident for ${key.key}" }
             }
         return keyed.toMap()
-    }
-
-    private fun body(original: String, block: String): String {
-        if (start !in original && end !in original) return original + "\n" + block
-        require(
-            original.split(start).size == 2 &&
-                original.split(end).size == 2 &&
-                original.indexOf(start) < original.indexOf(end)
-        ) {
-            "Owned incident block is malformed; preserve human content"
-        }
-        return original.substringBefore(start) + block + original.substringAfter(end)
     }
 
     override fun sync(
@@ -92,7 +81,7 @@ class GitHubIncidents(
                 val original = issue["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
                 val updated =
                     (if (ownerOnly) OWNER_PREFIX else "") +
-                        body(original.removePrefix(OWNER_PREFIX), block)
+                        status.replace(original.removePrefix(OWNER_PREFIX), block)
                 val labels =
                     issue["labels"]
                         ?.jsonArray
@@ -140,7 +129,7 @@ class GitHubIncidents(
                 buildJsonObject {
                     put(
                         "body",
-                        body(
+                        status.replace(
                             issue["body"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                             "$start\nState: ${if (superseded) "SUPERSEDED" else "RESOLVED"}\n\n$resolution\n$end",
                         ),
