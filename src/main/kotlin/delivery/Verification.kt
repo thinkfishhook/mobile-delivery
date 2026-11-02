@@ -56,7 +56,7 @@ class Verification(
                             env = appEnvironment(env, config.buildEnvironment),
                             log = log,
                         )
-                    } catch (error: CommandError) {
+                    } catch (error: Exception) {
                         val tail = log.useLines { lines ->
                             val last = ArrayDeque<String>()
                             lines.forEach { line ->
@@ -66,7 +66,11 @@ class Verification(
                             last.joinToString("\n")
                         }
                         val failingCommand =
-                            FailingCommand(command.joinToString(" "), error.exit, tail)
+                            FailingCommand(
+                                command.joinToString(" "),
+                                (error as? CommandError)?.exit,
+                                tail,
+                            )
                         println(
                             "::group::Output tail: ${failingCommand.command.replace("\r", " ").replace("\n", " ")}"
                         )
@@ -75,17 +79,9 @@ class Verification(
                             println(line.replace("::", ": :"))
                         }
                         println("::endgroup::")
-                        val text = log.readText()
-                        val validation =
-                            Regex(
-                                    "(?m)^e: |[0-9]+ tests completed, [1-9]|Analysis failed with|" +
-                                        "There were failing tests|\\*\\* TEST FAILED \\*\\*|" +
-                                        "error: .*\\.swift"
-                                )
-                                .containsMatchIn(text)
                         throw VerificationFailure(
                             "application-checks",
-                            if (validation) FailureKind.VALIDATION else FailureKind.INFRASTRUCTURE,
+                            FailureKind.INFRASTRUCTURE,
                             error.displayMessage().orEmpty(),
                             failingCommand = failingCommand,
                         )
@@ -143,7 +139,12 @@ class Verification(
             if (error is VerificationFailure)
                 throw VerificationFailure(
                     error.phase,
-                    if (failures.isNotEmpty()) FailureKind.VALIDATION else error.kind,
+                    when {
+                        error.phase == "application-checks" ->
+                            classifyVerificationFailure(log.readText(), failures)
+                        failures.isNotEmpty() -> FailureKind.VALIDATION
+                        else -> error.kind
+                    },
                     error.displayMessage().orEmpty(),
                     failures,
                     error.failingCommand,
@@ -206,3 +207,19 @@ internal fun commandDuration(milliseconds: Long): String {
         else -> "${seconds}s"
     }
 }
+
+// Only complete diagnostic lines establish compiler/analysis failures without a test report.
+private val verificationDiagnostics =
+    listOf(
+        Regex("^e: .+"),
+        Regex("^.+\\.swift:[0-9]+(?::[0-9]+)?: error: .+"),
+        Regex("^\\s*(?:> )?Analysis failed with [1-9][0-9]* weighted issues\\.\\s*$"),
+    )
+
+internal fun classifyVerificationFailure(log: String, failures: List<TestFailure>): FailureKind =
+    if (
+        failures.isNotEmpty() ||
+            log.lineSequence().any { line -> verificationDiagnostics.any { it.matches(line) } }
+    )
+        FailureKind.VALIDATION
+    else FailureKind.INFRASTRUCTURE
