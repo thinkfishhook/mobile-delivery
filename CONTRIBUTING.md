@@ -68,3 +68,31 @@ arguments from the app checkout. Gradle is not needed for the downloaded CLI.
 Do not cut v1.0.0 until the publication, sample onboarding and app adoption acceptance
 checks are complete. Publishing a tool release does not enable App Store automation
 in apps that use it.
+
+## Moving a pinned repository
+
+Before renaming a repository used by pinned workflow actions, pause the callers' delivery
+triggers and stop dispatching new runs. From this tool's checkout, use Python 3 and an
+authenticated `gh` CLI with Actions read access to every caller repository:
+
+```sh
+python3 internal/drain_check.py \
+  --target owner/client-one testflight-delivery.yml \
+  --target owner/client-one delivery-maintenance.yml \
+  --target owner/client-two ship.yml \
+  --wait --timeout 600 --interval 15
+```
+
+Repeat `--target owner/repo workflow.yml` for every workflow that can call the pinned
+repository, including release, rollout and maintenance workflows. Use workflow file
+names, not display names. The tool only reads GitHub Actions state; it never cancels runs
+or changes triggers. It prints each blocker as repository, workflow, run link, status and
+head SHA. Queued, in-progress, waiting and pending runs block the move.
+
+Without `--wait`, exit 0 means every selected workflow was drained when checked; exit 1
+means blockers remain. `--wait` polls until drained (exit 0) or the timeout expires.
+API errors, incomplete responses and timeouts exit 2, so a failed read never proves drain.
+The timeout covers API calls as well as polling, and each API call is bounded to 30 seconds.
+Leave triggers paused through the move: this is a point-in-time check, not a lock against
+new runs. After a successful check, move the repository, update the callers' pinned
+references, validate them, then restore triggers.

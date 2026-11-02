@@ -22,5 +22,9 @@ jobs:
           distribution: zulu
           java-version: '21.0.11'
       - run: ./gradlew --no-daemon check
+      - name: Test release and drain helpers
+        run: |
+          python3 internal/test_release.py
+          python3 internal/test_drain_check.py
       - name: Lint workflows and quickstart callers
         run: bash internal/actionlint.sh
