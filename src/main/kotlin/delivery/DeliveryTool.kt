@@ -188,14 +188,7 @@ class DeliveryTool(
         when (val selection = start.select(event)) {
             is StartRunSelection.Superseded -> {
                 outputs("operation=none\n")
-                writeSummary(
-                    RunSummary(
-                        "completed",
-                        "internal/${selection.sha}: superseded by ${selection.tip}",
-                        emptyList(),
-                        emptyList(),
-                    )
-                )
+                start.cancelSuperseded(selection, ::writeSummary)
             }
             is StartRunSelection.Proceed -> {
                 val selected = selection.sha

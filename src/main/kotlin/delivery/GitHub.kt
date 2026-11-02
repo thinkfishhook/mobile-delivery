@@ -26,6 +26,32 @@ class GitHub(
         return sha
     }
 
+    // Cancellation is a single bounded write, using the job token rather than receipt credentials.
+    fun cancelRun(runId: String) {
+        require(Regex("[0-9]+").matches(runId)) { "Expected a numeric GITHUB_RUN_ID" }
+        val result =
+            commands.execute(
+                listOf(
+                    "gh",
+                    "api",
+                    "repos/$repo/actions/runs/$runId/cancel",
+                    "--include",
+                    "--method",
+                    "POST",
+                ),
+                env = environment(null),
+                timeoutSeconds = 30,
+            )
+        val status =
+            Regex("^HTTP/[^ ]+ (\\d{3})", RegexOption.MULTILINE)
+                .find(result.stdout.replace("\r\n", "\n"))
+                ?.groupValues
+                ?.get(1)
+        require(result.exit == 0 && status == "202") {
+            "GitHub cancel request returned ${status?.let { "HTTP $it" } ?: "exit ${result.exit} without HTTP 202"}"
+        }
+    }
+
     internal fun retryRead(
         error: CommandError,
         attempt: Int,

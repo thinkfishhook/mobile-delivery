@@ -59,27 +59,18 @@ class DeliveryToolTest {
     }
 
     @Test
-    fun `superseded push finishes green without any delivery work`() = temp { root ->
+    fun `superseded push never succeeds when cancellation is refused`() = temp { root ->
         val h = DeliveryToolHarness(root)
-        // checkout can reset origin/trunk to the queued event's commit.
         h.tip = a
         h.remoteTip = b
-        val output = h.run("startRun", "push", sha = a).getOrThrow()
-        assertTrue("operation=none" in output, output)
-        assertTrue("superseded by $b" in output, output)
-        assertEquals(
-            RunSummary("completed", "internal/$a: superseded by $b", emptyList(), emptyList()),
-            json.decodeFromString<RunSummary>(
-                root.resolve("build/delivery/run-summary.json").readText()
-            ),
-        )
-        assertFalse("sha=$a" in output)
-        assertFalse("operation=deliver" in output)
-        assertEquals(1, h.remoteCalls)
-        assertEquals(
-            listOf("gh", "api", "repos/owner/repo/git/ref/heads/trunk", "--include"),
-            h.commands.calls.single { it.args.first() == "gh" }.args,
-        )
+        val output =
+            h.run("startRun", "push", sha = a).exceptionOrNull() as DeliveryToolHarness.ToolFailure
+        assertContains(output.message.orEmpty(), "permissions:\n  actions: write")
+        assertContains(output.output, "superseded by $b, not tested")
+        assertContains(output.output, "operation=none")
+        assertFalse("operation=deliver" in output.output)
+        assertEquals(2, h.remoteCalls)
+        assertTrue(h.commands.calls.none { it.args.first() == "asc" })
     }
 
     @Test

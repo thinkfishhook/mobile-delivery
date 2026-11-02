@@ -14,7 +14,42 @@ class StartRun(
     private val github: GitHub,
     private val env: Map<String, String>,
     private val branch: String,
+    private val pause: (Long) -> Unit = Thread::sleep,
+    private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
+    fun cancelSuperseded(
+        selection: StartRunSelection.Superseded,
+        summarize: (RunSummary) -> Unit,
+    ): Nothing {
+        val summary =
+            RunSummary(
+                "cancelled",
+                "internal/${selection.sha}: superseded by ${selection.tip}, not tested",
+                emptyList(),
+                emptyList(),
+            )
+        summarize(summary)
+        val started = elapsedMillis()
+        val fix =
+            "Grant the caller job permissions: actions: write. Retain its other permissions.\npermissions:\n  actions: write"
+        fun fail(reason: String): Nothing {
+            val message = "$reason\n$fix"
+            summarize(summary.copy(runHealth = "failed", actionNeeded = listOf(message)))
+            throw CommandError(message)
+        }
+        try {
+            github.cancelRun(env.getValue("GITHUB_RUN_ID"))
+        } catch (error: Exception) {
+            fail("Superseded run cancellation refused or failed: ${error.message}.")
+        }
+        // Acceptance is asynchronous. Never return to delivery work, even after HTTP 202.
+        while (true) {
+            val remaining = 180_000 - (elapsedMillis() - started)
+            if (remaining <= 0) fail("Superseded run was not cancelled within 180 seconds.")
+            pause(minOf(2000, remaining))
+        }
+    }
+
     fun select(event: WorkflowEvent): StartRunSelection {
         val selected = event.inputs?.sha?.takeIf { it.isNotBlank() } ?: env.getValue("GITHUB_SHA")
         require(Regex("[a-f0-9]{40}").matches(selected)) { "Select an exact full commit SHA" }

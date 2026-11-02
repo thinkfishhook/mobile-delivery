@@ -146,6 +146,7 @@ class DeliveryToolHarness(val root: Path) {
             path == "git/ref/heads/trunk" ->
                 if (failBranchRead) CommandResult(1, "", "HTTP 403")
                 else ok("""{"object":{"type":"commit","sha":"${remoteTip ?: tip}"}}""")
+            path == "actions/runs/10/cancel" -> CommandResult(1, "HTTP/2.0 403\n\n", "")
             path.startsWith("actions/runs?") -> ok("""{"workflow_runs":[]}""")
             path.startsWith("actions/runs/10/artifacts?") -> ok("""{"artifacts":[]}""")
             path.startsWith("actions/artifacts?") -> ok("""{"artifacts":[]}""")

@@ -138,9 +138,14 @@ internal class CompositeChecks {
                 }
             }
             if (finish >= 0) {
-                val evidence = steps.indexOfFirst { artifact(it) && it["if"] == "always()" }
+                val evidence = steps.indexOfFirst {
+                    it["id"] == "evidence" &&
+                        artifact(it) &&
+                        it["if"] ==
+                            "\${{ !cancelled() && steps.start.outputs.operation != 'none' }}"
+                }
                 require(evidence >= 0 && evidence < finish) {
-                    "$file: always retain evidence before the final sweep"
+                    "$file: retain evidence before the final sweep unless cancelled or superseded"
                 }
             }
         }
@@ -198,6 +203,12 @@ internal class CompositeChecks {
             }
         require(condition(packageStep) == "steps.prepare.outputs.retain == 'true'") {
             "$file: retain the package when prepare.outputs.retain is true"
+        }
+        require(
+            condition(command("compositeSummary")) ==
+                "!cancelled() && steps.start.outputs.operation != 'none' && steps.engine-install.outcome == 'success'"
+        ) {
+            "$file: preserve the pre-cancellation superseded summary"
         }
         val finish = command("finishRun")
         require(

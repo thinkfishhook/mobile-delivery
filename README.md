@@ -326,8 +326,11 @@ Two risks are accepted:
 
 A push to the delivery branch delivers that exact commit: verify → archive → retain → upload →
 distribute to the internal group → receipt tag. Intermediate commits are never built.
-If the branch has moved on by the time a queued push run starts, the run finishes green as
-"superseded by `<tip>`" and does no delivery work.
+If the branch has moved on by the time a queued push run starts, the run writes
+"superseded by `<tip>`, not tested", requests cancellation and waits for the runner to
+stop it. It finishes grey (cancelled), without verification, archive, upload or sweep
+work. A refused request or a 180-second timeout fails red with the caller's
+`actions: write` permission fix. Explicit dispatches selecting older SHAs still run.
 
 Dispatch **TestFlight delivery** on the delivery branch for anything else:
 
@@ -411,16 +414,18 @@ To see what keeps coming back, count recent incidents by title:
 gh issue list --label ios-delivery --state all --limit 500 --search "created:>=$(date -v-90d +%F)" --json title --jq '.[].title' | sort | uniq -c | sort -rn
 ```
 
-## Red and green
+## Red, green and grey
 
 - **Green:** the run did what it should. Pending operator actions stay green; they appear
   as `::warning::` annotations, in the step summary and in the incident issue.
+- **Grey (cancelled):** a superseded push was not tested. Its summary names the newer
+  tip; it does no delivery work.
 - **Red:** an error in this run: a failed delivery step, a refused `deliver`/`retry`, or an
   infrastructure or repair error.
 
 ## Evidence
 
-Each run uploads `ios-delivery-<run>-<attempt>` (verification reports and `build/delivery/`,
+Runs other than cancelled or superseded runs upload `ios-delivery-<run>-<attempt>` (verification reports and `build/delivery/`,
 including `run-summary.json`) for 90 days. It is uploaded before the final sweep, because a
 cancelled job loses its token within minutes. Each build's IPA, dSYMs and manifest are
 retained as `ios-build-<number>` and read back with checksum validation before any upload.

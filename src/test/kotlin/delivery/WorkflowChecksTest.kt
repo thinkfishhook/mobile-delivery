@@ -124,6 +124,10 @@ class WorkflowChecksTest {
                     original.replace("if: steps.prepare.outputs.retain == 'true'", "if: always()"),
                     original.replace("id: prepare", "id: build"),
                     original.replace(
+                        "!cancelled() && steps.start.outputs.operation != 'none'",
+                        "always()",
+                    ),
+                    original.replace(
                         "!cancelled() && steps.start.outcome == 'success'",
                         "success()",
                     ),
@@ -241,7 +245,12 @@ class WorkflowChecksTest {
                         movePhaseStep(text, "package", "mobile-delivery uploadBeta", after = true)
                     },
                     { text -> movePhaseStep(text, "mobile-delivery finishRun", "evidence") },
-                    { it.replace("if: always()", "if: success()") },
+                    {
+                        it.replace(
+                            "!cancelled() && steps.start.outputs.operation != 'none'",
+                            "success()",
+                        )
+                    },
                     { it.replace("id: engine-cache", "id: other-cache") },
                     {
                         it.replace(

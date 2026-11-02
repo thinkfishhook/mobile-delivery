@@ -9,6 +9,7 @@ class RecordingCommands : Commands {
         val input: String?,
         val cwd: Path?,
         val log: Path?,
+        val timeoutSeconds: Long = 21600,
     )
 
     val calls = mutableListOf<Call>()
@@ -23,7 +24,7 @@ class RecordingCommands : Commands {
         log: Path?,
         timeoutSeconds: Long,
     ): CommandResult {
-        val call = Call(args, env, input, cwd, log)
+        val call = Call(args, env, input, cwd, log, timeoutSeconds)
         calls += call
         return respond?.invoke(call) ?: responses.removeFirstOrNull() ?: CommandResult(0, "{}", "")
     }
