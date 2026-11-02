@@ -408,6 +408,46 @@ receipt-tag problems (including hand-made `deploy/testflight/` tags) need the ow
 Ordinary commit delivery incidents do not carry `needs-owner`. Sweeps correct these labels
 when an incident's kind changes, preserving unrelated labels and human notes.
 
+### Red-streak data for agents
+
+A red verification opens one `ios-delivery` red-streak issue. Later red commits update it;
+receipt-confirmed delivery closes it as completed with the fixing commit and build. The
+`## Data` section contains a fenced `json` object. Parse that block, check `schemaVersion`
+before interpreting it, and tolerate additional fields. Schema version **1** contains:
+
+| Field | Meaning |
+| --- | --- |
+| `app`, `branch` | App bundle identifier and delivery branch; never an environment dump. |
+| `firstRed` | Full SHA of the first red commit, or null when unavailable. |
+| `tested[]` | Ordered red commits: `sha`, `subject`, `runUrl`, `runAttempt`. Superseded untested commits are excluded. |
+| `failures[]` | `{ "failure": { "test", "message", "file"?, "line"?, "report"?, "command"? }, "status" }`; status is `new`, `still failing`, or `now passing`, relative to the preceding update. |
+| `suspectRange` | `base`, `firstRed`, `fromBaseline`, and ordered first-parent `commits[]` (`sha`, `subject`, `untested`); null when unavailable. |
+| `reproduce[]` | Shell-quoted local reproduction commands, narrowed to failing tests where supported. Review commands before running them. |
+| `links` | Optional `run`, `artifact`, `artifactName`, `compare`, and `reports[]` paths inside the evidence archive. |
+| `failingCommand` | Observed `command`, optional `exit`, and output `tail`; null if no failing process was recorded. |
+| `artifactAvailable` | False when the artifact link opens the run's artifact list instead of a known artifact ID. |
+| `testedCount` | Total recorded red commits, including rows omitted by the size guard. |
+| `truncation[]` | Describes omitted or shortened evidence; an empty array means no truncation. |
+| `updateKey` | Opaque replay fingerprint; agents should not interpret or change it. |
+
+The JSON is also the tool's persisted streak state; leave it intact when adding investigation
+notes outside the owned status block. Existing issues with older hidden state are migrated
+on their next red update. Missing optional fields are omitted rather than guessed.
+
+All generated prose and JSON strings use the shared secret redactor: known GitHub tokens,
+deployment-secret environment values and configured app build-environment values are masked,
+as are recognizable GitHub tokens, PEM private keys, JWTs, bearer credentials and credential
+assignments found in diagnostics. Operational metadata such as the branch and run ID is
+included explicitly; arbitrary environment entries are never enumerated into the issue.
+
+Bodies are bounded conservatively to 65,000 UTF-8 bytes (below GitHub's 65,536-character
+limit), including owned markers and existing notes. The guard shortens the output tail first,
+then commit subjects and commit lists, then failure/reproduction evidence if necessary.
+It adds a visible truncation notice and serializes the reduced model again, so the JSON
+always stays valid. `firstRed` and `testedCount` survive commit-list reduction. Consult the
+run artifact for full evidence when `truncation` is nonempty. If human notes alone prevent a
+bounded update, the write fails with an explanation rather than deleting those notes.
+
 To see what keeps coming back, count recent incidents by title:
 
 ```sh

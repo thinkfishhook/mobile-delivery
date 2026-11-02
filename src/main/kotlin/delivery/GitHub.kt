@@ -121,10 +121,11 @@ class GitHub(
                     ?.toIntOrNull()
             if (missing && status == 404) return null
             val errorBody = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
-            var message = errorBody?.get("message")?.jsonPrimitive?.content.orEmpty()
-            listOfNotNull(token, env["GH_TOKEN"], env["GITHUB_TOKEN"])
-                .filter { it.isNotEmpty() }
-                .forEach { message = message.replace(it, "***") }
+            val message =
+                redactSecrets(
+                    errorBody?.get("message")?.jsonPrimitive?.content.orEmpty(),
+                    listOfNotNull(token, env["GH_TOKEN"], env["GITHUB_TOKEN"]),
+                )
             val retryAfter =
                 Regex("(?im)^retry-after: *([0-9]+)")
                     .find(headers)

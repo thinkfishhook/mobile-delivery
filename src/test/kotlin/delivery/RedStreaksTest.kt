@@ -341,6 +341,7 @@ class RedStreaksTest {
                 .string("body")
                 .substringAfter("## Suspect commits")
                 .substringBefore("## Failing command")
+                .substringBefore("## Data")
                 .substringBefore("<!--")
                 .trim()
         val streaks =
@@ -355,6 +356,7 @@ class RedStreaksTest {
             body
                 .substringAfter("## Suspect commits")
                 .substringBefore("## Failing command")
+                .substringBefore("## Data")
                 .substringBefore("<!--")
                 .trim(),
         )

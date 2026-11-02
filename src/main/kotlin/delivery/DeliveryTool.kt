@@ -93,7 +93,13 @@ class DeliveryTool(
                 hints = hints,
                 holdIssues = GitHubHoldIssues(github),
             )
-        val redStreaks = RedStreaks(github, config.incidentMarker)
+        val redStreaks =
+            RedStreaks(
+                github,
+                config.incidentMarker,
+                app = config.bundleId,
+                secretValues = config.buildEnvironment.mapNotNull(env::get),
+            )
         val beta =
             BetaDelivery(
                 config,
@@ -260,18 +266,30 @@ class DeliveryTool(
                 summary.verificationFailureKind != FailureKind.VALIDATION
         )
             return
-        RedStreaks(github, config.incidentMarker).sync(
-            RedStreakCommit(
-                sha,
-                source.git("log", "-1", "--format=%s", sha),
-                workflowUrl(env),
-                env["GITHUB_RUN_ATTEMPT"]?.toIntOrNull() ?: 1,
-            ),
-            summary.failures,
-            redStreakDetails(github, config, env, sha, branch, summary, output),
-        ) { firstRed ->
-            redStreakSuspects(firstRed, config.baseline, source, GitHubReceiptTags(github), github)
-        }
+        RedStreaks(
+                github,
+                config.incidentMarker,
+                app = config.bundleId,
+                secretValues = config.buildEnvironment.mapNotNull(env::get),
+            )
+            .sync(
+                RedStreakCommit(
+                    sha,
+                    source.git("log", "-1", "--format=%s", sha),
+                    workflowUrl(env),
+                    env["GITHUB_RUN_ATTEMPT"]?.toIntOrNull() ?: 1,
+                ),
+                summary.failures,
+                redStreakDetails(github, config, env, sha, branch, summary, output),
+            ) { firstRed ->
+                redStreakSuspects(
+                    firstRed,
+                    config.baseline,
+                    source,
+                    GitHubReceiptTags(github),
+                    github,
+                )
+            }
     }
 
     private fun startRun(event: WorkflowEvent, start: StartRun, beta: BetaDelivery) {
