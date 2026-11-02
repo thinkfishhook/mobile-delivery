@@ -191,6 +191,8 @@ data class TestFailure(
     val message: String,
     val file: String? = null,
     val line: Int? = null,
+    val report: String? = null,
+    val command: String? = null,
 )
 
 @Serializable private data class XcresultTests(val testNodes: List<XcresultNode>)

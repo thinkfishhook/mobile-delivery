@@ -437,6 +437,25 @@ dSYMs and manifest are attached to a Release on its `deploy/testflight/…` rece
 they stay. The IPA stays with Apple. A build whose retained package has expired is not
 submitted.
 
+`build/delivery/run-summary.json` includes a typed `failures` array containing every
+failed test, including those beyond GitHub's annotation limit. The step summary also
+lists every failure in a Markdown table grouped by report; passing runs write no table.
+The array is empty when no test failures were collected. Each entry has this schema:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `test` | string | Test identifier, including its suite or target when available. |
+| `message` | string | Failure message, preserving its original newlines. |
+| `file` | string or null | Source file reported by the test runner. |
+| `line` | integer or null | Source line, when available. |
+| `report` | string or null | Configured report path relative to the app checkout. |
+| `command` | string or null | Verification command that created or last changed that report, with arguments joined by spaces. |
+
+Verification attaches `report` and `command` to collected failures. These fields can be
+null when context is unavailable; `testFailures` remains a compatibility alias for the
+collected list. Tools should consume `failures`. Markdown escaping affects the table
+only; JSON retains the original values.
+
 ## Receipts
 
 An annotated tag `deploy/testflight/<version>/<build>` on a commit means that commit's

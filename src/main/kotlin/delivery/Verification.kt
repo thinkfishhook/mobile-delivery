@@ -41,6 +41,7 @@ class Verification(
         // Reports from an earlier run must not stand in for this one.
         reports.forEach { (_, report) -> report.path.toFile().deleteRecursively() }
         val totals = linkedMapOf<String, TestTotals>()
+        val reportCommands = mutableMapOf<String, String>()
         try {
             config.verification.commands.forEach { command ->
                 log.appendText("Running ${command.joinToString(" ")}\n")
@@ -88,6 +89,15 @@ class Verification(
                             error.displayMessage().orEmpty(),
                             failingCommand = failingCommand,
                         )
+                    } finally {
+                        reports
+                            .filter { (name, report) ->
+                                report.path.exists() &&
+                                    report.path.reportSnapshot() != before.getValue(name)
+                            }
+                            .forEach { (name, _) ->
+                                reportCommands[name] = command.joinToString(" ")
+                            }
                     }
                 reports.filter { !it.second.path.exists() }.forEach { totals.remove(it.first) }
                 val produced =
@@ -114,10 +124,13 @@ class Verification(
         } catch (error: Exception) {
             val failures =
                 reports
-                    .map { it.second }
-                    .filter { it.path.exists() }
-                    .flatMap { report ->
-                        attemptEffect { report.failures(commands, env) }
+                    .filter { it.second.path.exists() }
+                    .flatMap { (name, report) ->
+                        attemptEffect {
+                            report.failures(commands, env).map {
+                                it.copy(report = name, command = reportCommands[name])
+                            }
+                        }
                             .getOrElse {
                                 log.appendText(
                                     "Could not read test failures from ${report.path}: ${it.displayMessage()}\n"

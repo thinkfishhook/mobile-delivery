@@ -89,8 +89,23 @@ class JUnitFailureTest {
             val summary = source.resolve("build/delivery/run-summary.json").readText()
             val decoded = json.decodeFromString<RunSummary>(summary)
             assertEquals(5, decoded.testFailures.size)
+            assertEquals(decoded.testFailures, decoded.failures)
             assertEquals(
-                TestFailure("sample.ValueTest.value", "expected 1 but was 2", "ValueTest.kt", 42),
+                listOf("junit", "junit", "tests.xcresult", "tests.xcresult", "tests.xcresult"),
+                decoded.failures.map { it.report },
+            )
+            assertTrue(decoded.failures.all { it.command == "sample-tests" })
+            val table = source.resolve("summary.md").readText().substringAfter("### Failing tests")
+            assertEquals(7, table.lineSequence().count { it.startsWith("|") })
+            assertEquals(
+                TestFailure(
+                    "sample.ValueTest.value",
+                    "expected 1 but was 2",
+                    "ValueTest.kt",
+                    42,
+                    "junit",
+                    "sample-tests",
+                ),
                 decoded.testFailures[1],
             )
             assertContains(summary, "sample.ValueTest.value")

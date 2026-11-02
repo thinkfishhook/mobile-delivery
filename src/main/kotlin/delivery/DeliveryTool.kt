@@ -375,6 +375,7 @@ data class RunSummary(
     val ignoredVersions: List<String> = emptyList(),
     val testFailures: List<TestFailure> = emptyList(),
     val failingCommand: FailingCommand? = null,
+    val failures: List<TestFailure> = testFailures,
 )
 
 internal fun writeRunSummary(root: Path, env: Map<String, String>, summary: RunSummary) {
@@ -384,7 +385,9 @@ internal fun writeRunSummary(root: Path, env: Map<String, String>, summary: RunS
         .createDirectories()
         .resolve("run-summary.json")
         .writeText(encoded + "\n")
-    env["GITHUB_STEP_SUMMARY"]?.let { Path.of(it).appendText("\n```json\n$encoded\n```\n") }
+    env["GITHUB_STEP_SUMMARY"]?.let {
+        Path.of(it).appendText("\n```json\n$encoded\n```\n" + failureTable(summary.failures))
+    }
     // JSON escapes preserve the data without replaying workflow commands from app output.
     println(encoded.replace("::", "\\u003a\\u003a"))
 }

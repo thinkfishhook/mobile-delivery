@@ -42,3 +42,52 @@ internal fun annotateTestFailures(failures: List<TestFailure>) {
             )
         )
 }
+
+// The run page keeps every failure; only annotations have a per-step cap.
+internal fun failureTable(failures: List<TestFailure>): String {
+    if (failures.isEmpty()) return ""
+    return buildString {
+        append("\n### Failing tests\n\n| Report | Command | Test | Message | Location |\n")
+        append("| --- | --- | --- | --- | --- |\n")
+        failures
+            .groupBy { it.report }
+            .values
+            .flatten()
+            .forEach { failure ->
+                val location =
+                    failure.file
+                        ?.let { file ->
+                            file + (failure.line?.let { ":$it" } ?: "")
+                        }
+                        .orEmpty()
+                append("| ")
+                append(
+                    listOf(
+                            failure.report ?: "Unknown report",
+                            failure.command ?: "Unknown command",
+                            failure.test,
+                            failure.message,
+                            location,
+                        )
+                        .joinToString(" | ") { summaryCell(it) }
+                )
+                append(" |\n")
+            }
+    }
+}
+
+private fun summaryCell(value: String): String =
+    value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("|", "&#124;")
+        .replace("\\", "&#92;")
+        .replace("`", "&#96;")
+        .replace("*", "&#42;")
+        .replace("_", "&#95;")
+        .replace("[", "&#91;")
+        .replace("]", "&#93;")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", "<br>")
