@@ -322,7 +322,7 @@ class Signing(
         try {
             verifyIpa(ipa, build)
         } catch (error: IllegalArgumentException) {
-            throw ArtifactError(error.message ?: "Artifact validation failed")
+            throw ArtifactError(error.displayMessage() ?: "Artifact validation failed")
         }
         val symbolsDirectory = archive.resolve("dSYMs")
         val symbols =

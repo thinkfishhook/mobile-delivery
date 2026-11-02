@@ -315,7 +315,7 @@ class BetaDelivery(
                         "Apple rejected ${manifest.number}: ${upload.code} ${upload.reason}"
                     )
                 throw CommandError(
-                    "Upload outcome of ${manifest.number} is uncertain (${error.message}); never upload it again, let a sweep confirm it"
+                    "Upload outcome of ${manifest.number} is uncertain (${error.displayMessage()}); never upload it again, let a sweep confirm it"
                 )
             }
         }
@@ -372,7 +372,9 @@ class BetaDelivery(
         attemptEffect { tags.write("deploy/testflight/$version/$number", sha, receipt) }
             .exceptionOrNull()
             ?.let {
-                println("::warning::Receipt for $version/$number not written yet: ${it.message}")
+                println(
+                    "::warning::Receipt for $version/$number not written yet: ${it.displayMessage()}"
+                )
             }
         return receipt
     }

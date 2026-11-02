@@ -273,7 +273,7 @@ class AppStoreRelease(
             )
         return ReleaseResult(
             "submitted $version/${build.number} (${if (request.phased) "phased" else "all users"})",
-            repair?.let { "Submission accepted, but $tag was not written: ${it.message}" },
+            repair?.let { "Submission accepted, but $tag was not written: ${it.displayMessage()}" },
             version.toString(),
             build.number,
         )
@@ -381,7 +381,11 @@ class AppStoreRelease(
                         wanted.forEach { tags.write(it, sha, receipt) }
                     } catch (error: Exception) {
                         findings +=
-                            SweepFinding(key, "receipt repair failed", repairError = error.message)
+                            SweepFinding(
+                                key,
+                                "receipt repair failed",
+                                repairError = error.displayMessage(),
+                            )
                     }
                 when {
                     version.state == "PENDING_DEVELOPER_RELEASE" ->

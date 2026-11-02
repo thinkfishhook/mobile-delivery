@@ -13,7 +13,7 @@ fun main(args: Array<String>) {
             ProcessCommands(),
         )
     } catch (error: Exception) {
-        System.err.println("Delivery stopped: ${error.message}")
+        System.err.println("Delivery stopped: ${error.displayMessage()}")
         exitProcess(1)
     }
 }
@@ -75,9 +75,10 @@ internal fun runTask(
                     RunSummary(
                         "failed",
                         "See the run evidence",
-                        listOfNotNull(error.message),
+                        listOfNotNull(error.displayMessage()),
                         emptyList(),
                         testFailures = error.testFailures,
+                        failingCommand = error.failingCommand,
                     ),
                 )
                 throw error

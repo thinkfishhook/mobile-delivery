@@ -40,7 +40,11 @@ class AndroidSetupTest {
                         assertFailsWith<CommandError> {
                             setupAndroid(root, config, commands, env)
                         }
-                    assertContains(error.message.orEmpty(), "setup-android.log")
+                    assertEquals(log, error.log)
+                    assertEquals(
+                        "sdkmanager failed (exit 1); see setup-android.log",
+                        error.displayMessage(),
+                    )
                 }
                 assertEquals("SDK diagnostic for exit $exit\n", log.readText())
                 assertEquals(1, commands.calls.size)

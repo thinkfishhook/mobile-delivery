@@ -29,9 +29,10 @@ class DeliveryTool(
                     RunSummary(
                         "failed",
                         "No delivery outcome inferred",
-                        listOfNotNull(error.message),
+                        listOfNotNull(error.displayMessage()),
                         emptyList(),
                         testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
+                        failingCommand = (error as? VerificationFailure)?.failingCommand,
                     )
                 )
             throw error
@@ -203,14 +204,15 @@ class DeliveryTool(
         } catch (error: Exception) {
             if (error is ReportedSweepFailure) throw error
             // Red runs say why on the run page, not only in the log.
-            error.message?.let { annotate(Annotation("error", it)) }
+            error.displayMessage()?.let { annotate(Annotation("error", it)) }
             writeSummary(
                 RunSummary(
                     "failed",
                     "See the run evidence",
-                    listOfNotNull(error.message),
+                    listOfNotNull(error.displayMessage()),
                     emptyList(),
                     testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
+                    failingCommand = (error as? VerificationFailure)?.failingCommand,
                 )
             )
             throw error
@@ -331,6 +333,7 @@ data class RunSummary(
     val repairErrors: List<String>,
     val ignoredVersions: List<String> = emptyList(),
     val testFailures: List<TestFailure> = emptyList(),
+    val failingCommand: FailingCommand? = null,
 )
 
 internal fun writeRunSummary(root: Path, env: Map<String, String>, summary: RunSummary) {
@@ -341,5 +344,6 @@ internal fun writeRunSummary(root: Path, env: Map<String, String>, summary: RunS
         .resolve("run-summary.json")
         .writeText(encoded + "\n")
     env["GITHUB_STEP_SUMMARY"]?.let { Path.of(it).appendText("\n```json\n$encoded\n```\n") }
-    println(encoded)
+    // JSON escapes preserve the data without replaying workflow commands from app output.
+    println(encoded.replace("::", "\\u003a\\u003a"))
 }

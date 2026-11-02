@@ -4,7 +4,15 @@ import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import kotlin.io.path.*
 
-open class CommandError(message: String) : RuntimeException(message)
+open class CommandError(
+    message: String,
+    val exit: Int? = null,
+    val log: Path? = null,
+) : RuntimeException(message)
+
+internal fun Throwable.displayMessage(): String? = message?.let { text ->
+    text + ((this as? CommandError)?.log?.let { "; see ${it.fileName}" } ?: "")
+}
 
 class ArtifactError(message: String) : CommandError(message)
 
@@ -71,8 +79,9 @@ fun Commands.run(
     val result = execute(args, cwd, env, input, log, timeoutSeconds)
     if (result.exit != 0)
         throw CommandError(
-            "${args.first()} failed (exit ${result.exit})" +
-                (log?.let { "; see ${it.fileName}" } ?: "")
+            "${args.first()} failed (exit ${result.exit})",
+            exit = result.exit,
+            log = log,
         )
     return result.stdout
 }

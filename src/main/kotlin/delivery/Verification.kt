@@ -9,7 +9,12 @@ class Verification(
     private val config: DeliveryConfig,
     private val commands: Commands,
     private val env: Map<String, String>,
+    private val tailLines: Int = 200,
 ) : BuildOperations {
+    init {
+        require(tailLines > 0) { "Output tail line count must be positive" }
+    }
+
     override fun checkEnvironment() {
         require(
             commands.run(listOf("uname", "-m"), env = buildEnvironment(env)).trim() == "arm64"
@@ -46,6 +51,23 @@ class Verification(
                         log = log,
                     )
                 } catch (error: CommandError) {
+                    val tail = log.useLines { lines ->
+                        val last = ArrayDeque<String>()
+                        lines.forEach { line ->
+                            if (last.size == tailLines) last.removeFirst()
+                            last.addLast(line)
+                        }
+                        last.joinToString("\n")
+                    }
+                    val failingCommand = FailingCommand(command.joinToString(" "), error.exit, tail)
+                    println(
+                        "::group::Output tail: ${failingCommand.command.replace("\r", " ").replace("\n", " ")}"
+                    )
+                    // The runner recognises workflow commands even after ordinary text.
+                    tail.lineSequence().forEach { line ->
+                        println(line.replace("::", ": :"))
+                    }
+                    println("::endgroup::")
                     val text = log.readText()
                     val validation =
                         Regex(
@@ -57,7 +79,8 @@ class Verification(
                     throw VerificationFailure(
                         "application-checks",
                         if (validation) FailureKind.VALIDATION else FailureKind.INFRASTRUCTURE,
-                        error.message.orEmpty(),
+                        error.displayMessage().orEmpty(),
+                        failingCommand = failingCommand,
                     )
                 }
             }
@@ -75,19 +98,20 @@ class Verification(
                         attemptEffect { report.failures(commands, env) }
                             .getOrElse {
                                 log.appendText(
-                                    "Could not read test failures from ${report.path}: ${it.message}\n"
+                                    "Could not read test failures from ${report.path}: ${it.displayMessage()}\n"
                                 )
                                 emptyList()
                             }
                     }
             annotateTestFailures(failures)
-            log.appendText("Verification failed: ${error.message}\n")
+            log.appendText("Verification failed: ${error.displayMessage()}\n")
             if (error is VerificationFailure)
                 throw VerificationFailure(
                     error.phase,
                     if (failures.isNotEmpty()) FailureKind.VALIDATION else error.kind,
-                    error.message.orEmpty(),
+                    error.displayMessage().orEmpty(),
                     failures,
+                    error.failingCommand,
                 )
             throw error
         } finally {
@@ -114,6 +138,7 @@ class VerificationFailure(
     val kind: FailureKind,
     message: String,
     val testFailures: List<TestFailure> = emptyList(),
+    val failingCommand: FailingCommand? = null,
 ) : CommandError(message)
 
 interface BuildOperations {
@@ -123,3 +148,5 @@ interface BuildOperations {
 
     fun archive(source: Path, output: Path, build: Build): Path
 }
+
+@Serializable data class FailingCommand(val command: String, val exit: Int?, val tail: String)

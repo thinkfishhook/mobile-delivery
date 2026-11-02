@@ -44,7 +44,7 @@ class Sweep(
             try {
                 appStore.sweep()
             } catch (error: Exception) {
-                listOf(SweepFinding("appstore", "unread", repairError = error.message))
+                listOf(SweepFinding("appstore", "unread", repairError = error.displayMessage()))
             }
         val appStoreRead = findings.none { it.operationKey == "appstore" && it.repairError != null }
         val receipts = facts.receipts + repaired
@@ -53,7 +53,8 @@ class Sweep(
                 checked(key, audit, appStoreRead, facts.builds, receipts)
             }
         } catch (error: Exception) {
-            findings += SweepFinding("incidents", "sync failed", repairError = error.message)
+            findings +=
+                SweepFinding("incidents", "sync failed", repairError = error.displayMessage())
         }
         return SweepReport(findings)
     }
@@ -150,7 +151,7 @@ class Sweep(
                 SweepFinding(
                     "receipt/$version/$number",
                     "receipt repair failed",
-                    repairError = error.message,
+                    repairError = error.displayMessage(),
                 )
             }
         }
@@ -164,7 +165,11 @@ class Sweep(
             require(source.count(sha) == count) { "$tag points at $sha, whose count is not $count" }
             null
         } catch (error: Exception) {
-            SweepFinding("audit", "receipt collision", repairError = "$tag: ${error.message}")
+            SweepFinding(
+                "audit",
+                "receipt collision",
+                repairError = "$tag: ${error.displayMessage()}",
+            )
         }
     }
 
