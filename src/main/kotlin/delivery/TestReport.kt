@@ -63,6 +63,58 @@ class XcresultReport(private val bundle: Path) : TestReport(bundle) {
         return totals(summary)
     }
 
+    fun failures(commands: Commands, env: Map<String, String>): List<TestFailure> =
+        failures(
+            commands.run(
+                listOf(
+                    "xcrun",
+                    "xcresulttool",
+                    "get",
+                    "test-results",
+                    "tests",
+                    "--path",
+                    bundle.toString(),
+                    "--compact",
+                ),
+                env = buildEnvironment(env),
+            )
+        )
+
+    fun failures(tests: String): List<TestFailure> {
+        val failures = mutableListOf<TestFailure>()
+        fun visit(node: XcresultNode, target: String, suite: String) {
+            val currentTarget =
+                if (node.nodeType in setOf("Unit test bundle", "UI test bundle")) node.name
+                else target
+            val currentSuite = if (node.nodeType == "Test Suite") node.name else suite
+            if (node.nodeType == "Test Case" && node.result == "Failed") {
+                val messages =
+                    node.descendants().filter { it.nodeType == "Failure Message" }.toList()
+                val location =
+                    messages.firstNotNullOfOrNull { it.sourceLocation } ?: node.sourceLocation
+                val identifier = node.nodeIdentifier ?: "$currentSuite/${node.name}"
+                val test =
+                    if (identifier.startsWith("$currentTarget/")) identifier
+                    else "$currentTarget/$identifier"
+                failures +=
+                    TestFailure(
+                        test,
+                        messages
+                            .map { it.name }
+                            .distinct()
+                            .joinToString("\n")
+                            .ifBlank { "Test failed" },
+                        location?.filePath,
+                        location?.lineNumber,
+                    )
+            } else {
+                node.children.forEach { visit(it, currentTarget, currentSuite) }
+            }
+        }
+        xcresultJson.decodeFromString<XcresultTests>(tests).testNodes.forEach { visit(it, "", "") }
+        return failures
+    }
+
     // Xcode 16+ `xcresulttool get test-results summary` JSON.
     fun totals(summary: String): TestTotals {
         val result = xcresultJson.decodeFromString<XcresultSummary>(summary)
@@ -93,3 +145,27 @@ private fun gate(report: Path, totals: TestTotals): TestTotals {
     }
     return totals
 }
+
+data class TestFailure(
+    val test: String,
+    val message: String,
+    val file: String? = null,
+    val line: Int? = null,
+)
+
+@Serializable private data class XcresultTests(val testNodes: List<XcresultNode>)
+
+@Serializable
+private data class XcresultNode(
+    val nodeType: String,
+    val name: String,
+    val nodeIdentifier: String? = null,
+    val result: String? = null,
+    val sourceLocation: XcresultLocation? = null,
+    val children: List<XcresultNode> = emptyList(),
+) {
+    fun descendants(): Sequence<XcresultNode> =
+        children.asSequence().flatMap { sequenceOf(it) + it.descendants() }
+}
+
+@Serializable private data class XcresultLocation(val filePath: String, val lineNumber: Int)

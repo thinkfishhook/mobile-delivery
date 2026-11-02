@@ -202,7 +202,7 @@ class DeliveryTool(
         } catch (error: Exception) {
             if (error is ReportedSweepFailure) throw error
             // Red runs say why on the run page, not only in the log.
-            error.message?.let { annotate("error", it) }
+            error.message?.let { annotate(Annotation("error", it)) }
             writeSummary(
                 RunSummary(
                     "failed",
@@ -257,7 +257,7 @@ class DeliveryTool(
                     )
                 else -> error("Unsupported App Store operation: $operation")
             }
-        result.action?.let { annotate("warning", it) }
+        result.action?.let { annotate(Annotation("warning", it)) }
         env["GITHUB_OUTPUT"]?.let {
             writeEnvironment(
                 mapOf(
@@ -322,8 +322,8 @@ class DeliveryTool(
     private fun report(sweep: Sweep, result: SweepReport, failed: Boolean) {
         writeSummary(sweep.summary(result, failed))
         result.findings.forEach { finding ->
-            finding.operatorAction?.let { annotate("warning", it) }
-            finding.repairError?.let { annotate("error", it) }
+            finding.operatorAction?.let { annotate(Annotation("warning", it)) }
+            finding.repairError?.let { annotate(Annotation("error", it)) }
         }
         if (result.broken) throw ReportedSweepFailure()
     }

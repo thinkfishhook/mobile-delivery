@@ -64,8 +64,10 @@ class JobPolicy(private val env: Map<String, String>) {
                 }
         ) {
             annotate(
-                "warning",
-                "$caller: permissions are broader than this action needs. Use:\n    $paste",
+                Annotation(
+                    "warning",
+                    "$caller: permissions are broader than this action needs. Use:\n    $paste",
+                )
             )
         }
     }

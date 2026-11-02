@@ -38,7 +38,7 @@ fun gate(env: Map<String, String>) {
     if (reasons.isNotEmpty()) {
         val reason = reasons.joinToString(" ")
         if (event == "workflow_dispatch") error(reason)
-        annotate("notice", reason)
+        annotate(Annotation("notice", reason))
     }
     val output =
         requireNotNull(env["GITHUB_OUTPUT"]) {

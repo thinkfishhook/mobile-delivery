@@ -46,6 +46,21 @@ class Verification(
                         log = log,
                     )
                 } catch (error: CommandError) {
+                    val failures =
+                        reports
+                            .map { it.second }
+                            .filterIsInstance<XcresultReport>()
+                            .filter { it.path.exists() }
+                            .flatMap { report ->
+                                attemptEffect { report.failures(commands, env) }
+                                    .getOrElse {
+                                        log.appendText(
+                                            "Could not read test failures from ${report.path}: ${it.message}\n"
+                                        )
+                                        emptyList()
+                                    }
+                            }
+                    annotateTestFailures(failures)
                     val text = log.readText()
                     val validation =
                         Regex(
@@ -56,7 +71,8 @@ class Verification(
                             .containsMatchIn(text)
                     throw VerificationFailure(
                         "application-checks",
-                        if (validation) FailureKind.VALIDATION else FailureKind.INFRASTRUCTURE,
+                        if (validation || failures.isNotEmpty()) FailureKind.VALIDATION
+                        else FailureKind.INFRASTRUCTURE,
                         error.message.orEmpty(),
                     )
                 }
