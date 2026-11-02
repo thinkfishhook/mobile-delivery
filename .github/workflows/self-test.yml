@@ -73,5 +73,6 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          actual="$(xcodebuild -version | head -n 1)"
+          actual="$(xcodebuild -version)"
+          actual="${actual%%$'\n'*}"
           [[ "$actual" == "$EXPECTED_XCODE" && "$actual" != "$ORIGINAL_XCODE" ]]
