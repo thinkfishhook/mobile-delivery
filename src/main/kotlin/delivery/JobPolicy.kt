@@ -3,6 +3,15 @@ package delivery
 import java.nio.file.Path
 import kotlin.io.path.readText
 
+private val callerPermissions =
+    mapOf(
+        "delivery" to linkedMapOf("contents" to "read", "actions" to "write", "issues" to "write"),
+        "maintenance" to
+            linkedMapOf("contents" to "read", "actions" to "read", "issues" to "write"),
+        "release" to linkedMapOf("contents" to "read", "actions" to "read", "issues" to "read"),
+        "rollout" to linkedMapOf("contents" to "read"),
+    )
+
 class JobPolicy(private val env: Map<String, String>) {
     fun validate(root: Path) {
         val file =
@@ -15,9 +24,10 @@ class JobPolicy(private val env: Map<String, String>) {
             }
         val caller = ".github/workflows/$file job $jobName"
         val mode = env["DELIVERY_VALIDATION_MODE"]
-        require(mode in setOf("delivery", "maintenance", "release", "rollout")) {
-            "$caller: jobPolicy requires mode delivery, maintenance, release or rollout; found $mode"
-        }
+        val minimum =
+            requireNotNull(callerPermissions[mode]) {
+                "$caller: jobPolicy requires mode delivery, maintenance, release or rollout; found $mode"
+            }
         val document = workflowDocument(root.resolve(".github/workflows/$file").readText())
         val job =
             requireNotNull((document["jobs"] as? Map<*, *>)?.get(jobName) as? Map<*, *>) {
@@ -32,11 +42,6 @@ class JobPolicy(private val env: Map<String, String>) {
                 concurrency["cancel-in-progress"] == false
         ) {
             "$caller: the delivery run lock is missing or unsafe. Add:\n    $lock"
-        }
-        val minimum = linkedMapOf("contents" to "read")
-        if (mode != "rollout") {
-            minimum["actions"] = if (mode == "delivery") "write" else "read"
-            minimum["issues"] = if (mode == "release") "read" else "write"
         }
         val paste =
             "permissions: { ${minimum.entries.joinToString(", ") { "${it.key}: ${it.value}" }} }"
