@@ -1,9 +1,120 @@
 package delivery
 
 import kotlin.test.*
+import kotlinx.serialization.encodeToString
 import org.junit.Test
 
 class SweepTest {
+    @Test
+    fun `finding serialization and summary keep the exact operation key strings`() =
+        temp { output ->
+            val world = World(output)
+            for (key in
+                listOf(
+                    "internal/sha",
+                    "appstore/26.09.01",
+                    "appstore/review-submission-id",
+                    "hold/7",
+                    "receipt/26.09.01/234.1",
+                    "audit",
+                    "appstore",
+                    "incidents",
+                    "legacy/unknown",
+                )) {
+                val finding = SweepFinding(key, "waiting")
+                val encoded =
+                    """
+                {
+                    "operationKey": "$key",
+                    "outcome": "waiting"
+                }
+            """
+                        .trimIndent()
+                assertEquals(encoded, json.encodeToString(finding))
+                assertEquals(finding, json.decodeFromString<SweepFinding>(encoded))
+                assertEquals(
+                    "$key: waiting",
+                    world.sweep().summary(SweepReport(listOf(finding))).deliveries,
+                )
+            }
+        }
+
+    @Test
+    fun `checked rules cover every incident kind and receipt settlement boundary`() {
+        for (audit in listOf(false, true)) for (readable in listOf(false, true)) {
+            for (receiptState in
+                listOf("missing", "present", "expired", "invalid", "absent")) temp { output ->
+                val world = World(output)
+                world.source.shas = listOf(sha)
+                world.deliver(sha)
+                if (receiptState != "present") world.tags.tags.clear()
+                world.tags.failWrites = true
+                when (receiptState) {
+                    "expired" -> world.apple.builds.replaceAll { it.copy(expired = true) }
+                    "invalid" ->
+                        world.apple.builds.replaceAll { it.copy(processingState = "PROCESSING") }
+                    "absent" -> world.apple.builds.clear()
+                }
+                var checked: ((String) -> Boolean)? = null
+                val incidents =
+                    object : Incidents {
+                        override fun sync(
+                            findings: List<SweepFinding>,
+                            tip: String,
+                            checkedSubject: (String) -> Boolean,
+                        ) {
+                            checked = checkedSubject
+                        }
+                    }
+                val store =
+                    AppStoreRelease(
+                        config,
+                        world.apple,
+                        world.tags,
+                        world.source,
+                        world.symbols(),
+                        world.env("s"),
+                        clock,
+                        holdIssues =
+                            HoldIssues {
+                                if (!readable) throw CommandError("unreadable")
+                                emptyList()
+                            },
+                    )
+                Sweep(
+                        config,
+                        world.beta(),
+                        store,
+                        world.apple,
+                        world.tags,
+                        world.source,
+                        incidents,
+                        { false },
+                    )
+                    .run(sha, audit)
+                val check = assertNotNull(checked)
+                assertEquals(audit, check("audit"))
+                for (key in
+                    listOf(
+                        "appstore/26.09.01",
+                        "appstore/review-submission-id",
+                        "hold/7",
+                    )) assertEquals(readable, check(key), key)
+                assertEquals(
+                    receiptState != "missing",
+                    check("receipt/26.09.01/234.1"),
+                    receiptState,
+                )
+                assertTrue(check("receipt/26.09.01/999.1"))
+                for (key in
+                    listOf("internal/sha", "appstore", "incidents", "legacy/unknown")) assertTrue(
+                    check(key),
+                    key,
+                )
+            }
+        }
+    }
+
     private val sha = "source-sha"
 
     @Test

@@ -5,6 +5,51 @@ import kotlinx.serialization.json.*
 import org.junit.Test
 
 class IncidentsTest {
+    @Test
+    fun `all incident kinds retain exact titles markers and close wording`() {
+        val titles =
+            mapOf(
+                "internal/0123456789abcdef" to "Beta delivery needs attention: 0123456789ab",
+                "appstore/26.09.01" to "App Store release needs attention: 26.09.01",
+                "appstore/review-submission-review-1" to
+                    "App Store release needs attention: review-submission-review-1",
+                "hold/7" to "iOS delivery needs attention: hold/7",
+                "receipt/26.09.01/234.1" to "iOS delivery needs attention: receipt/26.09.01/234.1",
+                "audit" to "iOS delivery needs attention: audit",
+                "appstore" to "iOS delivery needs attention: appstore",
+                "incidents" to "iOS delivery needs attention: incidents",
+                "legacy/unknown" to "iOS delivery needs attention: legacy/unknown",
+            )
+        for ((key, title) in titles) {
+            val remote = Issues()
+            remote.incidents.sync(listOf(problem(key, "Act")), "old") { true }
+            assertEquals(title, remote.issues.single().string("title"))
+            val marker = "<!-- example-app-delivery:$key -->"
+            val start = "<!-- example-app-delivery-status:start -->"
+            val end = "<!-- example-app-delivery-status:end -->"
+            assertEquals(
+                "$marker\n\n$start\nState: OPEN\nKind: delivery\n\nAct\n$end",
+                remote.issues.single().string("body"),
+            )
+            remote.incidents.sync(emptyList(), "new") { false }
+            assertEquals("open", remote.issues.single().string("state"))
+            remote.incidents.sync(emptyList(), "new") { true }
+            val superseded = key == "internal/0123456789abcdef"
+            val state = if (superseded) "SUPERSEDED" else "RESOLVED"
+            val wording =
+                if (superseded) "Superseded by trunk new; this commit was not delivered."
+                else "Resolved; the last sweep found nothing to do."
+            assertEquals(
+                "$marker\n\n$start\nState: $state\n\n$wording\n$end",
+                remote.issues.single().string("body"),
+            )
+            assertEquals(
+                if (superseded) "not_planned" else "completed",
+                remote.issues.single().string("state_reason"),
+            )
+        }
+    }
+
     // Issues in memory, served through the real GitHub adapter.
     private class Issues {
         val issues = mutableListOf<JsonObject>()
