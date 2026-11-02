@@ -32,6 +32,7 @@ class Sweep(
     private val incidents: Incidents,
     private val queuedPush: (String) -> Boolean,
     private val hints: WorkflowHints = WorkflowHints(emptyMap()),
+    private val onDelivered: (String, Trace) -> Unit = { _, _ -> },
 ) {
     fun run(tip: String, audit: Boolean = false): SweepReport {
         val findings = mutableListOf<SweepFinding>()
@@ -53,7 +54,8 @@ class Sweep(
         val repaired = mutableSetOf<String>()
         findings += repairReceipts(facts, repaired)
         if (audit) findings += auditReceipts(facts.receipts)
-        findings += tipStatus(tip, facts.copy(receipts = facts.receipts + repaired))
+        val tipTraces = beta.traces(tip, facts.copy(receipts = facts.receipts + repaired))
+        findings += tipStatus(tip, tipTraces)
         findings +=
             try {
                 appStore.sweep()
@@ -75,6 +77,7 @@ class Sweep(
             incidents.sync(findings, tip) { key ->
                 checked(key, audit, appStoreRead, facts.builds, receipts)
             }
+            tipTraces.latest?.takeIf { it.receiptTarget == tip }?.let { onDelivered(tip, it) }
         } catch (error: Exception) {
             findings +=
                 SweepFinding(
@@ -118,9 +121,8 @@ class Sweep(
             is IncidentSubject.Unknown -> true
         }
 
-    private fun tipStatus(tip: String, facts: BetaFacts): SweepFinding {
+    private fun tipStatus(tip: String, traces: CommitTraces): SweepFinding {
         val key = IncidentSubject.BetaCommit(tip)
-        val traces = beta.traces(tip, facts)
         if (traces.latest?.receiptTarget == tip) return SweepFinding(key, "delivered")
         val latest = traces.latest
         return when {

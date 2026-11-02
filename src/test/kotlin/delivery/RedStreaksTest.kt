@@ -1,5 +1,8 @@
 package delivery
 
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 import kotlin.io.path.*
 import kotlin.test.*
 import kotlinx.serialization.json.*
@@ -10,6 +13,193 @@ class RedStreaksTest {
     private val old = TestFailure("Old.fails", "expected true", "Tests.kt", 12)
     private val kept = TestFailure("Kept.fails", "expected saved", "Tests.kt", 20)
     private val added = TestFailure("New.fails", "expected open", "Other.kt", 30)
+
+    private fun DeliveryToolHarness.deliverCurrent() {
+        build("26.09.01", "${count(tip)}.1")
+        val original = commands.respond!!
+        commands.respond = { call ->
+            if (call.args.take(4) == listOf("asc", "builds", "test-notes", "list")) {
+                CommandResult(
+                    0,
+                    """{"data":[{"attributes":{"locale":"en-US","whatsNew":${JsonPrimitive(testerNotes(config, tip))}}}]}""",
+                    "",
+                )
+            } else original(call)
+        }
+        run(
+                "uploadBeta",
+                "workflow_dispatch",
+                inputs =
+                    mapOf(
+                        "operation" to "retry",
+                        "sha" to tip,
+                        "expected_attempt" to "${count(tip)}.1",
+                        "reason" to "Recover",
+                    ),
+            )
+            .getOrThrow()
+    }
+
+    @Test
+    fun `resolution records elapsed time distinct red commits and preserves human notes on replay`() =
+        temp { root ->
+            val h = DeliveryToolHarness(root)
+            h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
+            h.red(DeliveryToolHarness.sha('b'), "Second red", "Old.fails", "11")
+            h.red(DeliveryToolHarness.sha('b'), "Second red", "Old.fails", "12")
+            val original = h.streak()
+            h.issues[h.issues.indexOf(original)] =
+                JsonObject(
+                    original +
+                        mapOf(
+                            "created_at" to JsonPrimitive("2026-11-01T10:00:00Z"),
+                            "body" to
+                                JsonPrimitive(
+                                    "Human note before\n" +
+                                        original.string("body") +
+                                        "\nHuman note after"
+                                ),
+                        )
+                )
+            val streaks =
+                RedStreaks(
+                    GitHub("owner/repo", h.commands, emptyMap()),
+                    config.incidentMarker,
+                    Clock.fixed(Instant.parse("2026-11-02T12:30:00Z"), ZoneOffset.UTC),
+                )
+            streaks.closeDelivered(DeliveryToolHarness.sha('c'), "26.11.01/503.1")
+            val closed = h.streak()
+            val body = closed.string("body")
+            assertContains(body, "Duration: PT26H30M")
+            assertContains(body, "Commits tested red: 2")
+            assertContains(body, "State: RESOLVED")
+            assertTrue(body.startsWith("Human note before\n"))
+            assertTrue(body.endsWith("\nHuman note after"))
+            val before = h.commands.calls.size
+            streaks.closeDelivered(DeliveryToolHarness.sha('c'), "26.11.01/503.1")
+            assertEquals(closed, h.streak())
+            assertFalse(
+                h.commands.calls.drop(before).any {
+                    it.args.getOrNull(2)?.endsWith("issues/${closed.string("number")}") == true
+                }
+            )
+        }
+
+    @Test
+    fun `failed close after receipt write is recovered by the next sweep`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
+        val number = h.streak().string("number")
+        val original = h.commands.respond!!
+        h.commands.respond = { call ->
+            if (
+                call.args.getOrNull(2)?.endsWith("issues/$number") == true &&
+                    call.input?.contains("\"closed\"") == true
+            )
+                throw CommandError("Job cancelled before close")
+            original(call)
+        }
+        h.tip = DeliveryToolHarness.sha('b')
+        h.counts[h.tip] = 501
+        assertFails { h.deliverCurrent() }
+        assertEquals(h.tip, h.tags.getValue("deploy/testflight/26.09.01/501.1").first)
+        assertEquals("open", h.streak().string("state"))
+        h.commands.respond = original
+        h.run("sweep", "schedule").getOrThrow()
+        assertEquals("closed", h.streak().string("state"))
+        assertEquals("completed", h.streak().string("state_reason"))
+    }
+
+    @Test
+    fun `successful Apple distribution without a written receipt keeps streak open`() =
+        temp { root ->
+            val h = DeliveryToolHarness(root)
+            h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
+            val originalIssue = h.streak()
+            val original = h.commands.respond!!
+            h.commands.respond = { call ->
+                if (call.args.getOrNull(2)?.endsWith("/git/refs") == true)
+                    throw CommandError("Receipt write interrupted")
+                original(call)
+            }
+            h.tip = DeliveryToolHarness.sha('b')
+            h.counts[h.tip] = 501
+            h.deliverCurrent()
+            assertTrue(h.tags.isEmpty())
+            assertEquals(originalIssue, h.streak())
+        }
+
+    @Test
+    fun `red A then delivered B closes completed with fixing commit build and streak record`() =
+        temp { root ->
+            val h = DeliveryToolHarness(root)
+            h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
+            val issue = h.streak()
+            h.tip = DeliveryToolHarness.sha('b')
+            h.counts[h.tip] = 501
+            h.deliverCurrent()
+            val closed = h.issues.single { it.string("number") == issue.string("number") }
+            assertEquals("closed", closed.string("state"))
+            assertEquals("completed", closed.string("state_reason"))
+            val body = closed.string("body")
+            assertContains(body, "fixed by `${h.tip}`")
+            assertContains(body, "delivered `26.09.01/501.1`")
+            assertContains(body, "Duration:")
+            assertContains(body, "Commits tested red: 1")
+        }
+
+    @Test
+    fun `scheduled sweep closes stale streak when tip receipt exists`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
+        h.tip = DeliveryToolHarness.sha('b')
+        h.counts[h.tip] = 501
+        h.tags["deploy/testflight/26.09.01/501.1"] = h.tip to "receipt"
+        h.run("sweep", "schedule").getOrThrow()
+        val closed = h.streak()
+        assertEquals("closed", closed.string("state"))
+        assertEquals("completed", closed.string("state_reason"))
+        assertContains(closed.string("body"), "fixed by `${h.tip}`, delivered `26.09.01/501.1`")
+    }
+
+    @Test
+    fun `red after closure opens a fresh streak`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
+        val firstNumber = h.streak().string("number")
+        h.tip = DeliveryToolHarness.sha('b')
+        h.counts[h.tip] = 501
+        h.tags["deploy/testflight/26.09.01/501.1"] = h.tip to "receipt"
+        h.run("sweep", "schedule").getOrThrow()
+        h.red(DeliveryToolHarness.sha('c'), "New red", "New.fails", "12")
+        val streaks = h.issues.filter { ":red-streak -->" in it.string("body") }
+        assertEquals(2, streaks.size)
+        assertEquals(
+            "closed",
+            streaks.single { it.string("number") == firstNumber }.string("state"),
+        )
+        val fresh = streaks.single { it.string("state") == "open" }
+        assertContains(fresh.string("body"), "**new** New.fails")
+        assertFalse("Old.fails" in fresh.string("body"))
+    }
+
+    @Test
+    fun `infrastructure failure after red keeps the streak open`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
+        val original = h.streak()
+        h.tip = DeliveryToolHarness.sha('b')
+        h.counts[h.tip] = 501
+        h.verificationFailure =
+            VerificationFailure(
+                "application-checks",
+                FailureKind.INFRASTRUCTURE,
+                "Runner disconnected",
+            )
+        assertTrue(h.run("buildBeta", "push").isFailure)
+        h.run("finishRun", "push", extraEnv = mapOf("IOS_EXECUTION_FAILED" to "true")).getOrThrow()
+        assertEquals(original, h.streak())
+    }
 
     @Test
     fun `failure diff is stable when messages and lines change`() {

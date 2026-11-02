@@ -1,5 +1,8 @@
 package delivery
 
+import java.time.Clock
+import java.time.Duration
+import java.time.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -88,7 +91,11 @@ internal fun renderRedStreak(
 @Serializable
 private data class RedStreakEvidence(val failures: List<TestFailure>, val suspects: SuspectRange?)
 
-class RedStreaks(private val github: GitHub, private val owner: String) {
+class RedStreaks(
+    private val github: GitHub,
+    private val owner: String,
+    private val clock: Clock = Clock.systemUTC(),
+) {
     private val marker = "<!-- $owner:${IncidentSubject.RedStreak.key} -->"
     private val status = OwnedStatusBlock(owner)
     private val start = status.start
@@ -103,6 +110,40 @@ class RedStreaks(private val github: GitHub, private val owner: String) {
             }
         require(issues.size <= 1) { "Duplicate owned red-streak incident" }
         return issues.singleOrNull()
+    }
+
+    internal fun closeDelivered(sha: String, build: String) {
+        val issue = open() ?: return
+        val original = issue["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
+        val content = status.content(original)
+        val commits =
+            content
+                ?.takeIf { stateStart in it }
+                ?.let {
+                    json.decodeFromString<List<RedStreakCommit>>(
+                        it.substringAfter(stateStart).substringBefore(" -->")
+                    )
+                }
+        val started = issue["created_at"]?.jsonPrimitive?.contentOrNull?.let(Instant::parse)
+        val duration =
+            started?.let {
+                Duration.between(it, clock.instant()).coerceAtLeast(Duration.ZERO).toString()
+            } ?: "unknown (issue creation time unavailable)"
+        val resolution =
+            "## Resolution\nfixed by `$sha`, delivered `$build`\n\nDuration: $duration\nCommits tested red: ${commits?.distinctBy { it.sha }?.size ?: 1}"
+        val history = content.orEmpty().replaceFirst("State: OPEN", "State: RESOLVED").trim()
+        val block =
+            if (content == null) "$start\nState: RESOLVED\n\n$resolution\n$end"
+            else "$start\n$history\n\n$resolution\n$end"
+        github.api(
+            "issues/${issue.string("number")}",
+            buildJsonObject {
+                put("body", status.replace(original, block))
+                put("state", "closed")
+                put("state_reason", "completed")
+            },
+            method = "PATCH",
+        )
     }
 
     internal fun sync(

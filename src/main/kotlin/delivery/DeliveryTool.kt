@@ -93,6 +93,7 @@ class DeliveryTool(
                 hints = hints,
                 holdIssues = GitHubHoldIssues(github),
             )
+        val redStreaks = RedStreaks(github, config.incidentMarker)
         val beta =
             BetaDelivery(
                 config,
@@ -102,6 +103,9 @@ class DeliveryTool(
                 source,
                 Verification(config, commands, env),
                 env,
+                onReceipted = { receipt ->
+                    redStreaks.closeDelivered(receipt.sha, "${receipt.version}/${receipt.number}")
+                },
             )
         requireActionsWriter(env, branch)
         val payload =
@@ -156,6 +160,13 @@ class DeliveryTool(
                 GitHubIncidents(github, config.incidentMarker, branch),
                 github::queuedPush,
                 hints,
+                onDelivered = { sha, trace ->
+                    val version =
+                        requireNotNull(trace.version) {
+                            "Delivered receipt for $sha build ${trace.number} must name its marketing version"
+                        }
+                    redStreaks.closeDelivered(sha, "$version/${trace.number}")
+                },
             )
         val output = root.resolve("build/delivery").createDirectories()
         try {

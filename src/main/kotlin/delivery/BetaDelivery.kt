@@ -58,6 +58,7 @@ class BetaDelivery(
     private val builds: BuildOperations,
     private val env: Map<String, String>,
     private val clock: Clock = Clock.systemUTC(),
+    private val onReceipted: (Receipt) -> Unit = {},
 ) {
     private fun now() = config.now(clock)
 
@@ -370,13 +371,13 @@ class BetaDelivery(
             .resolve("receipt.json")
             .writeText(json.encodeToString(Receipt.serializer(), receipt) + "\n")
         // A failed tag write leaves the delivery successful; the run's final sweep repairs it.
-        attemptEffect { tags.write("deploy/testflight/$version/$number", sha, receipt) }
-            .exceptionOrNull()
-            ?.let {
-                println(
-                    "::warning::Receipt for $version/$number not written yet: ${it.displayMessage()}"
-                )
-            }
+        val write = attemptEffect { tags.write("deploy/testflight/$version/$number", sha, receipt) }
+        write.exceptionOrNull()?.let {
+            println(
+                "::warning::Receipt for $version/$number not written yet: ${it.displayMessage()}"
+            )
+        }
+        if (write.isSuccess) onReceipted(receipt)
         return receipt
     }
 }
