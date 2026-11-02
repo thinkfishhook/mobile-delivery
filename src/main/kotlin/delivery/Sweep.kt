@@ -58,6 +58,7 @@ class Sweep(
             try {
                 appStore.sweep()
             } catch (error: Exception) {
+                if (error is CredentialProblem) throw error
                 listOf(
                     SweepFinding(
                         IncidentSubject.AppStore,
@@ -183,6 +184,7 @@ class Sweep(
                     "receipt repaired for $version/$number",
                 )
             } catch (error: Exception) {
+                if (error is CredentialProblem) throw error
                 SweepFinding(
                     IncidentSubject.Receipt(version.toString(), number.toString()),
                     "receipt repair failed",

@@ -19,7 +19,7 @@ internal fun reportCredentialProblem(
         env,
         RunSummary(
             "failed",
-            "Signing credential rejected",
+            "Delivery credential rejected",
             listOf(problem.message!!),
             repairErrors,
         ),

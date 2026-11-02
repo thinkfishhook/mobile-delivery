@@ -1,0 +1,5 @@
+{
+  "exit": 3,
+  "stdout": "",
+  "stderr": "Error: builds: failed to fetch: Authentication credentials are missing or invalid.\nHint: Your credentials may be invalid or expired. Try `asc auth status` and re-login if needed.\n"
+}

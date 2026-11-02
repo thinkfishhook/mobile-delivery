@@ -20,13 +20,19 @@ class Asc(
         toolEnvironment(env, "ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY") +
             mapOf("ASC_STRICT_AUTH" to "true")
 
+    private fun invoke(args: List<String>, log: Path? = null): String {
+        try {
+            return executeAsc(commands, args, environment, log)
+        } catch (error: AscError) {
+            throw error.credentialProblem() ?: error
+        }
+    }
+
     private fun call(vararg args: String): JsonElement =
-        json.parseToJsonElement(
-            commands.run(listOf("asc", *args, "--output", "json"), env = environment)
-        )
+        json.parseToJsonElement(invoke(listOf(*args, "--output", "json")))
 
     private fun logged(args: List<String>, log: Path) {
-        commands.run(listOf("asc") + args, env = environment, log = log)
+        invoke(args, log)
     }
 
     override fun uploads() =

@@ -1,0 +1,5 @@
+{
+  "exit": 3,
+  "stdout": "",
+  "stderr": "Error: builds: failed to fetch: The given operation is not allowed.\nHint: Check that your API key has the right role/permissions for this operation in App Store Connect.\n"
+}

@@ -302,6 +302,7 @@ class BetaDelivery(
             try {
                 apple.upload(retainedPackage.ipa, destination)
             } catch (error: Exception) {
+                if (error is CredentialProblem) throw error
                 val upload = runCatching {
                     apple.uploads()
                 }
