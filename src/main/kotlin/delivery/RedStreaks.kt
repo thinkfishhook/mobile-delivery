@@ -61,12 +61,35 @@ internal fun diffFailures(
             }
 }
 
+@Serializable
+internal data class RedStreakDetails(
+    val failingCommand: FailingCommand?,
+    val commands: List<List<String>>,
+    val branch: String,
+    val runUrl: String,
+    val artifactName: String,
+    val artifactUrl: String,
+    val reportPaths: List<String>,
+    val artifactAvailable: Boolean = true,
+)
+
+private fun shellArgument(argument: String): String =
+    if (Regex("[A-Za-z0-9_./:=+@%,-]+").matches(argument)) argument
+    else "'" + argument.replace("'", "'\"'\"'") + "'"
+
+private fun codeBlock(text: String, language: String = ""): String {
+    val fence =
+        "`".repeat(maxOf(3, (Regex("`+").findAll(text).maxOfOrNull { it.value.length } ?: 0) + 1))
+    return "$fence$language\n$text\n$fence"
+}
+
 internal fun renderRedStreak(
     commits: List<RedStreakCommit>,
     failures: List<TestFailure>,
     previous: List<TestFailure> = emptyList(),
     suspects: SuspectRange? = null,
     repo: String = "",
+    details: RedStreakDetails? = null,
 ): String = buildString {
     append("Commits tested red:\n")
     append(
@@ -98,10 +121,53 @@ internal fun renderRedStreak(
         )
         append("\n\nCommits marked untested were superseded and never verified.")
     } else append("Range unavailable for this older update.")
+    if (details != null) {
+        append("\n\n## Failing command\n\n")
+        details.failingCommand?.let {
+            append(codeBlock(it.command, "sh"))
+            append(
+                "\n\nExit code: ${it.exit ?: "unavailable"}\n\n<details>\n<summary>Output tail</summary>\n\n"
+            )
+            append(codeBlock(it.tail, "text"))
+            append("\n\n</details>")
+        } ?: append("No failing process recorded; see the failing tests above.")
+        append("\n\n## Reproduce\n\n")
+        if (details.commands.isEmpty()) {
+            append(
+                details.failingCommand?.command?.let { codeBlock(it, "sh") }
+                    ?: "No matching configured command was recorded."
+            )
+        } else
+            append(
+                details.commands.joinToString("\n\n") {
+                    codeBlock(
+                        TestReport.reproduce(it, failures)
+                            .joinToString(" ", transform = ::shellArgument),
+                        "sh",
+                    )
+                }
+            )
+        append(
+            "\n\n## Evidence\n\n[Run](${details.runUrl})\n\n[${details.artifactName}](${details.artifactUrl})"
+        )
+        if (!details.artifactAvailable)
+            append("\n\nArtifact unavailable; the link opens the run's artifact list.")
+        if (details.reportPaths.isNotEmpty()) {
+            append("\n\nResult paths inside the artifact:\n")
+            append(details.reportPaths.joinToString("\n") { "- `${redStreakText(it)}`" })
+        }
+        append(
+            "\n\n## Done when\n\na commit on `${redStreakText(details.branch)}` delivers to TestFlight, which closes this issue automatically."
+        )
+    }
 }
 
 @Serializable
-private data class RedStreakEvidence(val failures: List<TestFailure>, val suspects: SuspectRange?)
+private data class RedStreakEvidence(
+    val failures: List<TestFailure>,
+    val suspects: SuspectRange?,
+    val details: RedStreakDetails? = null,
+)
 
 class RedStreaks(
     private val github: GitHub,
@@ -183,6 +249,7 @@ class RedStreaks(
     internal fun sync(
         commit: RedStreakCommit,
         failures: List<TestFailure>,
+        details: RedStreakDetails? = null,
         suspectRange: (String) -> SuspectRange = { SuspectRange("baseline", it, emptyList()) },
     ) {
         val issue = open()
@@ -223,16 +290,21 @@ class RedStreaks(
                         it.substringAfter(evidenceStart).substringBefore(" -->")
                     )
                 }
-        if (updatedCommits == commits && evidence?.failures == failures) return
+        if (
+            updatedCommits == commits &&
+                evidence?.failures == failures &&
+                evidence.details == details
+        )
+            return
         val suspects = evidence?.suspects ?: suspectRange(updatedCommits.first().sha)
         val evidenceState =
-            Json.encodeToString(RedStreakEvidence(failures, suspects))
+            Json.encodeToString(RedStreakEvidence(failures, suspects, details))
                 .replace("<", "\\u003c")
                 .replace(">", "\\u003e")
         val state =
             Json.encodeToString(updatedCommits).replace("<", "\\u003c").replace(">", "\\u003e")
         val block =
-            "$start\nState: OPEN\n\n${renderRedStreak(updatedCommits, failures, evidence?.failures.orEmpty(), suspects, github.repo)}\n\n$stateStart$state -->\n$evidenceStart$evidenceState -->\n$end"
+            "$start\nState: OPEN\n\n${renderRedStreak(updatedCommits, failures, evidence?.failures.orEmpty(), suspects, github.repo, details)}\n\n$stateStart$state -->\n$evidenceStart$evidenceState -->\n$end"
         val updated =
             if (legacy == null) status.replace(original, block)
             else

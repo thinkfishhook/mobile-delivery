@@ -337,7 +337,12 @@ class RedStreaksTest {
         val a = DeliveryToolHarness.sha('a')
         h.red(a, "First", "Old.fails")
         val before =
-            h.streak().string("body").substringAfter("## Suspect commits").substringBefore("<!--")
+            h.streak()
+                .string("body")
+                .substringAfter("## Suspect commits")
+                .substringBefore("## Failing command")
+                .substringBefore("<!--")
+                .trim()
         val streaks =
             RedStreaks(GitHub("owner/repo", h.commands, emptyMap()), config.incidentMarker)
         val commit =
@@ -345,7 +350,14 @@ class RedStreaksTest {
         val failures = listOf(TestFailure("New.fails", "expected true"))
         streaks.sync(commit, failures) { error("Must retain the original range") }
         val body = h.streak().string("body")
-        assertEquals(before, body.substringAfter("## Suspect commits").substringBefore("<!--"))
+        assertEquals(
+            before,
+            body
+                .substringAfter("## Suspect commits")
+                .substringBefore("## Failing command")
+                .substringBefore("<!--")
+                .trim(),
+        )
         assertContains(body, "**now passing** Old.fails")
         streaks.sync(commit, failures) { error("Replay must retain the original range") }
         assertEquals(body, h.streak().string("body"))

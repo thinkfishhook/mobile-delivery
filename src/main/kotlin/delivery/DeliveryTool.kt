@@ -224,7 +224,7 @@ class DeliveryTool(
                     )
                 }
                 "finishRun" -> {
-                    syncRedStreak(github, source, selected, output)
+                    syncRedStreak(github, source, selected, output, branch)
                     report(sweep, sweep.run(healthTip), env["IOS_EXECUTION_FAILED"] == "true")
                 }
                 "sweep" -> {
@@ -239,7 +239,13 @@ class DeliveryTool(
         }
     }
 
-    private fun syncRedStreak(github: GitHub, source: GitSource, sha: String, output: Path) {
+    private fun syncRedStreak(
+        github: GitHub,
+        source: GitSource,
+        sha: String,
+        output: Path,
+        branch: String,
+    ) {
         if (
             env["GITHUB_EVENT_NAME"] != "push" ||
                 env["IOS_DELIVERY_ENABLED"] != "true" ||
@@ -262,6 +268,7 @@ class DeliveryTool(
                 env["GITHUB_RUN_ATTEMPT"]?.toIntOrNull() ?: 1,
             ),
             summary.failures,
+            redStreakDetails(github, config, env, sha, branch, summary, output),
         ) { firstRed ->
             redStreakSuspects(firstRed, config.baseline, source, GitHubReceiptTags(github), github)
         }

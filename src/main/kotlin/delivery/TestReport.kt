@@ -13,6 +13,13 @@ sealed class TestReport(val path: Path) {
     abstract fun failures(commands: Commands, env: Map<String, String>): List<TestFailure>
 
     companion object {
+        internal fun reproduce(command: List<String>, failures: List<TestFailure>): List<String> {
+            val relevant = failures.filter {
+                it.command == null || it.command == command.joinToString(" ")
+            }
+            return JUnitReport.narrow(XcresultReport.narrow(command, relevant), relevant)
+        }
+
         fun resolve(source: Path, report: String): TestReport {
             val path = source.resolve(report)
             return if (report.endsWith(".xcresult")) XcresultReport(path) else JUnitReport(path)
@@ -21,6 +28,30 @@ sealed class TestReport(val path: Path) {
 }
 
 class JUnitReport(private val directory: Path) : TestReport(directory) {
+    companion object {
+        internal fun narrow(command: List<String>, failures: List<TestFailure>): List<String> {
+            if (command.firstOrNull()?.substringAfterLast('/') !in setOf("gradle", "gradlew"))
+                return command
+            val tests =
+                failures
+                    .filter { it.report?.endsWith(".xcresult") != true && '/' !in it.test }
+                    .map { it.test }
+                    .distinct()
+            if (tests.isEmpty()) return command
+            var skip = false
+            val unfiltered = command.filter {
+                if (skip) {
+                    skip = false
+                    false
+                } else if (it == "--tests") {
+                    skip = true
+                    false
+                } else !it.startsWith("--tests=")
+            }
+            return unfiltered + tests.flatMap { listOf("--tests", it) }
+        }
+    }
+
     override fun totals(commands: Commands, env: Map<String, String>): TestTotals = totals()
 
     override fun failures(commands: Commands, env: Map<String, String>): List<TestFailure> =
@@ -77,6 +108,23 @@ class JUnitReport(private val directory: Path) : TestReport(directory) {
 }
 
 class XcresultReport(private val bundle: Path) : TestReport(bundle) {
+    companion object {
+        internal fun narrow(command: List<String>, failures: List<TestFailure>): List<String> {
+            val tool =
+                if (command.firstOrNull()?.substringAfterLast('/') == "xcrun") command.getOrNull(1)
+                else command.firstOrNull()
+            if (tool?.substringAfterLast('/') != "xcodebuild" || "test" !in command) return command
+            val tests =
+                failures
+                    .map { it.test.removeSuffix("()") }
+                    .filter { it.split('/').size == 3 }
+                    .distinct()
+            if (tests.isEmpty()) return command
+            return command.filterNot { it.startsWith("-only-testing:") } +
+                tests.map { "-only-testing:$it" }
+        }
+    }
+
     override fun totals(commands: Commands, env: Map<String, String>): TestTotals {
         if (!bundle.exists()) {
             throw VerificationFailure(
