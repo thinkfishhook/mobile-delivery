@@ -123,7 +123,7 @@ class DeliveryToolTest {
         assertTrue("::warning::$action" in output, output)
         assertTrue("Deliver it" in root.resolve("build/delivery/run-summary.json").readText())
         assertContains(h.issues.single()["labels"].toString(), INCIDENT_LABEL)
-        assertEquals(setOf(HOLD_LABEL, INCIDENT_LABEL), h.labels)
+        assertEquals(setOf(HOLD_LABEL, INCIDENT_LABEL, OWNER_LABEL), h.labels)
     }
 
     @Test

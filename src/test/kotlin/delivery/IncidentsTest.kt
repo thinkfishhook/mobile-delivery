@@ -24,7 +24,10 @@ class IncidentsTest {
             val remote = Issues()
             remote.incidents.sync(listOf(problem(key, "Act")), "old") { true }
             assertEquals(title, remote.issues.single().string("title"))
-            val marker = "<!-- example-app-delivery:$key -->"
+            val prefix =
+                if (key.startsWith("internal/") || key == "legacy/unknown") ""
+                else "Owner action required:\n\n"
+            val marker = "$prefix<!-- example-app-delivery:$key -->"
             val start = "<!-- example-app-delivery-status:start -->"
             val end = "<!-- example-app-delivery-status:end -->"
             assertEquals(
@@ -49,6 +52,133 @@ class IncidentsTest {
             )
         }
     }
+
+    @Test
+    fun `each subject kind declares ownership through labels and body prefix`() {
+        val kinds =
+            listOf(
+                IncidentSubject.BetaCommit("sha") to false,
+                IncidentSubject.AppStoreVersion("1.0") to true,
+                IncidentSubject.ReviewSubmission("review") to true,
+                IncidentSubject.Hold(7) to true,
+                IncidentSubject.Receipt("1.0", "234.1") to true,
+                IncidentSubject.Audit to true,
+                IncidentSubject.AppStore to true,
+                IncidentSubject.Incidents to true,
+                IncidentSubject.Unknown("legacy") to false,
+            )
+        for ((subject, ownerOnly) in kinds) {
+            assertEquals(ownerOnly, subject.ownerOnly, subject.key)
+            val remote = Issues()
+            remote.incidents.sync(listOf(SweepFinding(subject, "blocked", "Act")), "sha") { true }
+            val issue = remote.issues.single()
+            assertEquals(
+                if (ownerOnly) setOf("ios-delivery", "needs-owner") else setOf("ios-delivery"),
+                issue["labels"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet(),
+                subject.key,
+            )
+            assertEquals(
+                ownerOnly,
+                issue.string("body").startsWith("Owner action required:"),
+                subject.key,
+            )
+        }
+    }
+
+    @Test
+    fun `kind changes correct owner labels in both directions and preserve human labels`() {
+        val remote = Issues()
+        val delivery = problem("internal/sha", "Retry")
+        val repair = delivery.copy(operatorAction = null, repairError = "Repair receipt")
+        remote.incidents.sync(listOf(delivery), "sha") { true }
+        remote.issues[0] =
+            JsonObject(
+                remote.issues[0] +
+                    ("labels" to
+                        buildJsonArray {
+                            add(buildJsonObject { put("name", "ios-delivery") })
+                            add(buildJsonObject { put("name", "human-label") })
+                        })
+            )
+        remote.incidents.sync(listOf(repair), "sha") { true }
+        assertEquals(
+            setOf("ios-delivery", "human-label", "needs-owner"),
+            remote.issues.single()["labels"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet(),
+        )
+        assertTrue(remote.issues.single().string("body").startsWith("Owner action required:"))
+        val writes = remote.writes()
+        remote.incidents.sync(listOf(repair), "sha") { true }
+        assertEquals(writes, remote.writes())
+        remote.incidents.sync(listOf(delivery), "sha") { true }
+        assertEquals(
+            setOf("ios-delivery", "human-label"),
+            remote.issues.single()["labels"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet(),
+        )
+        assertFalse(remote.issues.single().string("body").startsWith("Owner action required:"))
+        assertEquals(1, remote.issues.size)
+    }
+
+    @Test
+    fun `stale owner label is removed even when the status body is unchanged`() {
+        val remote = Issues()
+        val findings = listOf(problem("internal/sha", "Retry"))
+        remote.incidents.sync(findings, "sha") { true }
+        remote.issues[0] =
+            JsonObject(
+                remote.issues[0] +
+                    ("labels" to
+                        buildJsonArray {
+                            add("ios-delivery")
+                            add("needs-owner")
+                        })
+            )
+        remote.incidents.sync(findings, "sha") { true }
+        assertEquals(
+            listOf("ios-delivery"),
+            remote.issues.single()["labels"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun `existing owner incident gains missing label without changing its status or notes`() {
+        val remote = Issues()
+        val findings = listOf(problem("hold/7", "Resolve hold"))
+        remote.incidents.sync(findings, "sha") { true }
+        val original = remote.issues.single()
+        val note =
+            "Human note\n" +
+                original.string("body").removePrefix("Owner action required:\n\n") +
+                "\nKeep this"
+        remote.issues[0] =
+            JsonObject(
+                original +
+                    mapOf(
+                        "labels" to buildJsonArray { add("ios-delivery") },
+                        "body" to JsonPrimitive(note),
+                    )
+            )
+        remote.incidents.sync(findings, "sha") { true }
+        assertEquals("Owner action required:\n\n$note", remote.issues.single().string("body"))
+        assertContains(remote.issues.single()["labels"].toString(), "needs-owner")
+    }
+
+    @Test
+    fun `a hand-made receipt tag produces an owner incident before the sweep stops`() =
+        temp { output ->
+            val remote = Issues()
+            val world = World(output)
+            world.source.shas = listOf("sha")
+            world.deliver("sha")
+            remote.incidents.sync(listOf(problem("internal/old", "Retry old")), "old") { true }
+            world.tags.tags["deploy/testflight/hand-made"] = world.tags.tags.values.single()
+            val report = world.sweep(remote.incidents).run("sha")
+            assertTrue(report.broken)
+            assertEquals("open", remote.state("internal/old"))
+            val issue = remote.issues.last()
+            assertTrue(issue.string("body").startsWith("Owner action required:"))
+            assertContains(issue.string("body"), "deploy/testflight/hand-made")
+            assertContains(issue["labels"].toString(), "needs-owner")
+        }
 
     // Issues in memory, served through the real GitHub adapter.
     private class Issues {

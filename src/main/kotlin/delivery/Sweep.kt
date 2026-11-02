@@ -35,7 +35,21 @@ class Sweep(
 ) {
     fun run(tip: String, audit: Boolean = false): SweepReport {
         val findings = mutableListOf<SweepFinding>()
-        val facts = beta.facts()
+        val facts =
+            try {
+                beta.facts()
+            } catch (error: InvalidReceiptName) {
+                // A hand-made tag blocks all receipt reads. Report it without resolving any
+                // incidents whose subjects this interrupted sweep could not check.
+                val finding =
+                    SweepFinding(
+                        IncidentSubject.Audit,
+                        "invalid receipt tag",
+                        repairError = error.displayMessage(),
+                    )
+                incidents.sync(listOf(finding), tip) { false }
+                return SweepReport(listOf(finding))
+            }
         val repaired = mutableSetOf<String>()
         findings += repairReceipts(facts, repaired)
         if (audit) findings += auditReceipts(facts.receipts)

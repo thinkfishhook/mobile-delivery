@@ -389,8 +389,16 @@ problem, start from its `ios-delivery` incident or filter the runs to failures.
 Incidents are issues labelled `ios-delivery`, found by an owner marker in the body. A sweep
 opens one per problem, updates its status block (people's notes are kept), and closes it
 when the problem is gone, as superseded when the branch moved past that commit. Closed incidents
-are never read or reopened: a problem that comes back gets a new issue. To see what keeps
-coming back, count recent incidents by title:
+are never read or reopened: a problem that comes back gets a new issue.
+
+For agent operators, `ios-delivery` identifies delivery incidents. Owner-only incidents also
+carry `needs-owner` and start with `Owner action required:`. Agents must skip `needs-owner`
+issues: App Store Connect manual actions, receipt-repair errors, unresolvable holds and
+receipt-tag problems (including hand-made `deploy/testflight/` tags) need the owner.
+Ordinary commit delivery incidents do not carry `needs-owner`. Sweeps correct these labels
+when an incident's kind changes, preserving unrelated labels and human notes.
+
+To see what keeps coming back, count recent incidents by title:
 
 ```sh
 gh issue list --label ios-delivery --state all --limit 500 --search "created:>=$(date -v-90d +%F)" --json title --jq '.[].title' | sort | uniq -c | sort -rn
@@ -534,7 +542,7 @@ See [DESIGN-holds.md](DESIGN-holds.md) for the general hold design.
 ### Enabling App Store release
 
 1. Let any version already in review in App Store Connect finish, or remove it from review.
-   The enabled maintenance sweep creates missing `testflight-hold` and `ios-delivery` labels.
+   The enabled maintenance sweep creates missing `testflight-hold`, `ios-delivery` and `needs-owner` labels.
 2. Dispatch **Delivery maintenance** with `app-store-preflight`. Check the build it would
    select, the first rule each of the three newest builds fails, whether its dSYMs can be
    kept, and the metadata source validation (the last released version).

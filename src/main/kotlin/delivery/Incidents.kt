@@ -3,6 +3,14 @@ package delivery
 import kotlinx.serialization.json.*
 
 const val INCIDENT_LABEL = "ios-delivery"
+const val OWNER_LABEL = "needs-owner"
+
+private enum class IncidentKind(val marker: String, val ownerOnly: Boolean) {
+    DELIVERY("delivery", false),
+    RECORD_REPAIR("record-repair", true),
+}
+
+private const val OWNER_PREFIX = "Owner action required:\n\n"
 
 interface Incidents {
     // Opens or updates an incident for every finding that needs a person. Closes the other open
@@ -66,19 +74,44 @@ class GitHubIncidents(
                 .groupBy { it.operationKey }
         val open = owned()
         problems.forEach { (key, rows) ->
-            val kind = if (rows.any { it.repairError != null }) "record-repair" else "delivery"
+            val kind =
+                if (rows.any { it.repairError != null }) IncidentKind.RECORD_REPAIR
+                else IncidentKind.DELIVERY
+            val ownerOnly = key.ownerOnly || kind.ownerOnly
             val evidence =
                 rows.mapNotNull { it.operatorAction ?: it.repairError }.joinToString("\n")
-            val block = "$start\nState: OPEN\nKind: $kind\n\n$evidence\n$end"
+            val block = "$start\nState: OPEN\nKind: ${kind.marker}\n\n$evidence\n$end"
             val issue = open[key]
-            if (issue == null) create(key, marker(key) + "\n\n" + block)
+            if (issue == null)
+                create(
+                    key,
+                    (if (ownerOnly) OWNER_PREFIX else "") + marker(key) + "\n\n" + block,
+                    ownerOnly,
+                )
             else {
                 val original = issue["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                val updated = body(original, block)
-                if (updated != original)
+                val updated =
+                    (if (ownerOnly) OWNER_PREFIX else "") +
+                        body(original.removePrefix(OWNER_PREFIX), block)
+                val labels =
+                    issue["labels"]
+                        ?.jsonArray
+                        .orEmpty()
+                        .map {
+                            if (it is JsonObject) it.string("name") else it.jsonPrimitive.content
+                        }
+                        .toSet()
+                val desiredLabels =
+                    (labels - OWNER_LABEL) +
+                        INCIDENT_LABEL +
+                        (if (ownerOnly) setOf(OWNER_LABEL) else emptySet())
+                if (updated != original || labels != desiredLabels)
                     github.api(
                         "issues/${issue.string("number")}",
-                        buildJsonObject { put("body", updated) },
+                        buildJsonObject {
+                            put("body", updated)
+                            putJsonArray("labels") { desiredLabels.forEach { add(it) } }
+                        },
                         method = "PATCH",
                     )
             }
@@ -119,14 +152,17 @@ class GitHubIncidents(
     }
 
     // A lost create response is read back from the open issues, never written twice.
-    private fun create(key: IncidentSubject, body: String) {
+    private fun create(key: IncidentSubject, body: String, ownerOnly: Boolean) {
         val write = attemptEffect {
             github.api(
                 "issues",
                 buildJsonObject {
                     put("title", key.title)
                     put("body", body)
-                    putJsonArray("labels") { add(INCIDENT_LABEL) }
+                    putJsonArray("labels") {
+                        add(INCIDENT_LABEL)
+                        if (ownerOnly) add(OWNER_LABEL)
+                    }
                 },
             )
         }

@@ -13,20 +13,23 @@ interface ReceiptTags {
     fun write(tag: String, sha: String, receipt: Receipt)
 }
 
+class InvalidReceiptName(message: String) : IllegalArgumentException(message)
+
 // The tool writes only `<prefix><YY.MM.RR>/<count>.<attempt>`. Anything else under a receipt
 // prefix was made by hand and would be misread, so the run stops until a person deletes it.
 fun requireReceiptNames(prefix: String, names: Set<String>): Set<String> = names.onEach { tag ->
     val parts = tag.removePrefix(prefix).split('/')
-    require(
+    val valid =
         parts.size == 2 &&
             runCatching {
                 MarketingVersion(parts[0])
                 BuildNumber(parts[1])
             }
                 .isSuccess
-    ) {
-        "$tag is not a receipt the delivery tool writes (${prefix}<YY.MM.RR>/<count>.<attempt>). Delete it, then rerun: git push origin :refs/tags/$tag"
-    }
+    if (!valid)
+        throw InvalidReceiptName(
+            "$tag is not a receipt the delivery tool writes (${prefix}<YY.MM.RR>/<count>.<attempt>). Delete it, then rerun: git push origin :refs/tags/$tag"
+        )
 }
 
 class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {

@@ -3,7 +3,7 @@ package delivery
 import kotlinx.serialization.json.*
 
 fun GitHub.ensureDeliveryLabels() {
-    for (label in listOf(HOLD_LABEL, INCIDENT_LABEL)) {
+    for (label in listOf(HOLD_LABEL, INCIDENT_LABEL, OWNER_LABEL)) {
         if (api("labels/$label", missing = true) != null) continue
         try {
             api(
@@ -14,6 +14,8 @@ fun GitHub.ensureDeliveryLabels() {
                     put(
                         "description",
                         if (label == HOLD_LABEL) "Hold a TestFlight build out of the App Store"
+                        else if (label == OWNER_LABEL)
+                            "Owner action required; agents skip these incidents"
                         else "iOS delivery needs attention",
                     )
                 },

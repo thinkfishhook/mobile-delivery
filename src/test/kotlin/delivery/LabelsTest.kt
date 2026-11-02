@@ -6,10 +6,26 @@ import org.junit.Test
 
 class LabelsTest {
     @Test
+    fun `missing needs-owner label explains that agents skip it`() {
+        val commands = RecordingCommands()
+        commands.respond = { call ->
+            if (call.args[2] == "repos/owner/repo/labels/needs-owner")
+                CommandResult(1, "", "HTTP 404")
+            else CommandResult(0, "{}", "")
+        }
+        GitHub("owner/repo", commands, emptyMap()).ensureDeliveryLabels()
+        val payload =
+            json.parseToJsonElement(commands.calls.single { it.input != null }.input!!).jsonObject
+        assertEquals("needs-owner", payload.string("name"))
+        assertContains(payload.string("description"), "agents skip")
+    }
+
+    @Test
     fun `maintenance creates missing labels but preserves existing labels`() {
         val commands = RecordingCommands()
         commands.respond = { call ->
             when (call.args[2]) {
+                "repos/owner/repo/labels/needs-owner" -> CommandResult(0, "{}", "")
                 "repos/owner/repo/labels/$HOLD_LABEL" -> CommandResult(0, "{}", "")
                 "repos/owner/repo/labels/$INCIDENT_LABEL" -> CommandResult(1, "", "HTTP 404")
                 "repos/owner/repo/labels" -> CommandResult(0, "{}", "")
@@ -46,7 +62,7 @@ class LabelsTest {
             val github = GitHub("owner/repo", commands, emptyMap())
             if (code == "already_exists") {
                 github.ensureDeliveryLabels()
-                assertEquals(2, commands.calls.count { it.input != null })
+                assertEquals(3, commands.calls.count { it.input != null })
             } else assertFailsWith<GitHubFailure> { github.ensureDeliveryLabels() }
         }
     }

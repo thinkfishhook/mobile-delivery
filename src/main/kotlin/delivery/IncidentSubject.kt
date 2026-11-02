@@ -11,6 +11,8 @@ import kotlinx.serialization.encoding.Encoder
 sealed interface IncidentSubject {
     val key: String
 
+    val ownerOnly: Boolean
+
     val title: String
         get() =
             when (this) {
@@ -26,21 +28,29 @@ sealed interface IncidentSubject {
             }
 
     data class BetaCommit(val sha: String) : IncidentSubject {
+        override val ownerOnly = false
+
         override val key
             get() = "internal/$sha"
     }
 
     data class AppStoreVersion(val version: String) : IncidentSubject {
+        override val ownerOnly = true
+
         override val key
             get() = "appstore/$version"
     }
 
     data class ReviewSubmission(val id: String) : IncidentSubject {
+        override val ownerOnly = true
+
         override val key
             get() = "appstore/review-submission-$id"
     }
 
     data class Hold(val issue: String) : IncidentSubject {
+        override val ownerOnly = true
+
         constructor(issue: Int) : this(issue.toString())
 
         override val key
@@ -48,24 +58,34 @@ sealed interface IncidentSubject {
     }
 
     data class Receipt(val version: String, val number: String) : IncidentSubject {
+        override val ownerOnly = true
+
         override val key
             get() = "receipt/$version/$number"
     }
 
     data object Audit : IncidentSubject {
+        override val ownerOnly = true
+
         override val key = "audit"
     }
 
     data object AppStore : IncidentSubject {
+        override val ownerOnly = true
+
         override val key = "appstore"
     }
 
     data object Incidents : IncidentSubject {
+        override val ownerOnly = true
+
         override val key = "incidents"
     }
 
     // Preserve unrecognised historical markers instead of reinterpreting or dropping them.
-    data class Unknown(override val key: String) : IncidentSubject
+    data class Unknown(override val key: String) : IncidentSubject {
+        override val ownerOnly = false
+    }
 
     companion object {
         // Decode legacy keys only at the issue-marker/serialization boundary. Domain decisions
