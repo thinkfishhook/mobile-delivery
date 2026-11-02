@@ -10,10 +10,10 @@ class ActionDiscoveryTest {
     fun `composite callers resolve every role with version tags and exact SHAs`() {
         val roles =
             mapOf(
-                "testflight" to "testflight-delivery.yml",
-                "maintenance" to "maintenance.yml",
-                "app-store-release" to "app-store-release.yml",
-                "app-store-rollout" to "app-store-release.yml",
+                "testflight" to "testflight",
+                "maintenance" to "maintenance",
+                "app-store-release" to "app-store-release",
+                "app-store-rollout" to "app-store-release",
             )
         for ((action, role) in roles) {
             for (pin in listOf("v1", "v1.0.0", "a".repeat(40))) {
@@ -97,7 +97,7 @@ class ActionDiscoveryTest {
                 commands,
                 mapOf("DELIVERY_WORKFLOW_REPOSITORY" to "tools/delivery"),
             )
-        assertFalse(github.runUsesWorkflow(run, "testflight-delivery.yml"))
+        assertFalse(github.runUsesWorkflow(run, "testflight"))
         assertContains(
             commands.calls.single().args[2],
             "contents/.github/workflows/ship.yml?ref=$sha",

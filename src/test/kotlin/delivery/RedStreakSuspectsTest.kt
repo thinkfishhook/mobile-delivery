@@ -55,8 +55,7 @@ class RedStreakSuspectsTest {
         val github =
             GitHub("owner/repo", commands, mapOf("DELIVERY_WORKFLOW_REPOSITORY" to "owner/tool"))
         for (sha in listOf(baseline, delivered, skippedOne, skippedTwo)) {
-            github.actionRoleCache["testflight-delivery.yml@$sha"] =
-                setOf("testflight-delivery.yml")
+            github.actionRoleCache["testflight-delivery.yml@$sha"] = setOf("testflight")
         }
         val range = redStreakSuspects(firstRed, baseline, source, tags, github)
         assertEquals(delivered, range.base)

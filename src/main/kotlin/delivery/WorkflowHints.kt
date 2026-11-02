@@ -2,7 +2,8 @@ package delivery
 
 import kotlinx.serialization.json.*
 
-// Paths come from GitHub metadata, never from a guessed caller filename.
+// Workflow arguments identify composite roles (testflight, maintenance, app-store-release).
+// Caller paths come from GitHub metadata, never from a guessed filename.
 internal fun workflowFile(path: String?): String? =
     path?.substringBefore('@')?.substringAfter(".github/workflows/", "")?.takeIf {
         Regex("[A-Za-z0-9_.-]+\\.ya?ml").matches(it)
@@ -21,9 +22,11 @@ class WorkflowHints(
             "${env["GITHUB_SERVER_URL"] ?: "https://github.com"}/${env["GITHUB_REPOSITORY"] ?: ""}/actions"
     }
 
+    fun deliver(sha: String) = command("testflight", "-f operation=deliver -f sha=$sha")
+
     fun retry(sha: String, attempt: String) =
         command(
-            "testflight-delivery.yml",
+            "testflight",
             "-f operation=retry -f sha=$sha -f expected_attempt=$attempt -f reason=\"<why this retry is safe>\"",
         )
 }

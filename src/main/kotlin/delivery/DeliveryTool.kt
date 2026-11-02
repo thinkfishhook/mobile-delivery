@@ -57,11 +57,11 @@ class DeliveryTool(
             github.workflowHints(
                 when (mode) {
                     "appStoreRelease",
-                    "rolloutControl" -> "app-store-release.yml"
+                    "rolloutControl" -> "app-store-release"
                     "startRun",
                     "buildBeta",
                     "uploadBeta",
-                    "finishRun" -> "testflight-delivery.yml"
+                    "finishRun" -> "testflight"
                     else -> null
                 }
             )
@@ -160,6 +160,23 @@ class DeliveryTool(
                 GitHubIncidents(github, config.incidentMarker, branch),
                 github::queuedPush,
                 hints,
+                redStreak = { sha ->
+                    val summaryFile = root.resolve("build/delivery/run-summary.json")
+                    val current =
+                        if (
+                            mode == "finishRun" &&
+                                selected == sha &&
+                                env["IOS_EXECUTION_FAILED"] == "true" &&
+                                summaryFile.exists()
+                        )
+                            json.decodeFromString<RunSummary>(summaryFile.readText())
+                        else null
+                    if (
+                        current != null && current.verificationFailureKind != FailureKind.VALIDATION
+                    )
+                        null
+                    else redStreaks.covering(sha)
+                },
                 onDelivered = { sha, trace ->
                     val version =
                         requireNotNull(trace.version) {
@@ -238,7 +255,12 @@ class DeliveryTool(
         )
             return
         RedStreaks(github, config.incidentMarker).sync(
-            RedStreakCommit(sha, source.git("log", "-1", "--format=%s", sha), workflowUrl(env)),
+            RedStreakCommit(
+                sha,
+                source.git("log", "-1", "--format=%s", sha),
+                workflowUrl(env),
+                env["GITHUB_RUN_ATTEMPT"]?.toIntOrNull() ?: 1,
+            ),
             summary.failures,
         ) { firstRed ->
             redStreakSuspects(firstRed, config.baseline, source, GitHubReceiptTags(github), github)

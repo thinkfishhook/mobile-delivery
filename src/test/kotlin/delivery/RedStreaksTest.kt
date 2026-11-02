@@ -41,6 +41,119 @@ class RedStreaksTest {
     }
 
     @Test
+    fun `a newer delivery run or rerun is not covered by stale red evidence`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        h.red(DeliveryToolHarness.sha('a'), "Red", "Old.fails")
+        var runId = "10"
+        var attempt = 1
+        val original = h.commands.respond!!
+        h.commands.respond = { call ->
+            if (call.args.getOrNull(2)?.contains("actions/runs?head_sha=") == true)
+                CommandResult(
+                    0,
+                    """{"workflow_runs":[{"id":$runId,"head_sha":"${h.tip}","run_attempt":$attempt,"path":".github/workflows/ship-it.yml"}]}""",
+                    "",
+                )
+            else original(call)
+        }
+        val github =
+            GitHub(
+                "owner/repo",
+                h.commands,
+                mapOf("DELIVERY_WORKFLOW_REPOSITORY" to "tools/delivery"),
+            )
+        github.actionRoleCache["ship-it.yml@${h.tip}"] = setOf("testflight")
+        val streaks = RedStreaks(github, config.incidentMarker)
+        assertNotNull(streaks.covering(h.tip))
+        runId = "11"
+        assertNull(streaks.covering(h.tip))
+        runId = "10"
+        attempt = 2
+        assertNull(streaks.covering(h.tip))
+    }
+
+    @Test
+    fun `infrastructure rerun on same red SHA retains the undelivered finding`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        h.red(DeliveryToolHarness.sha('a'), "Red", "Old.fails")
+        h.verificationFailure =
+            VerificationFailure(
+                "application-checks",
+                FailureKind.INFRASTRUCTURE,
+                "Runner disconnected",
+            )
+        assertTrue(h.run("buildBeta", "push").isFailure)
+        h.run("finishRun", "push", extraEnv = mapOf("IOS_EXECUTION_FAILED" to "true")).getOrThrow()
+        val summary =
+            json.decodeFromString<RunSummary>(
+                root.resolve("build/delivery/run-summary.json").readText()
+            )
+        assertTrue(summary.actionNeeded.any { "Deliver it:" in it })
+        assertEquals("open", h.streak().string("state"))
+    }
+
+    @Test
+    fun `red tip has one streak and no per commit deliver incident on repeated sweeps`() =
+        temp { root ->
+            val h = DeliveryToolHarness(root)
+            h.red(DeliveryToolHarness.sha('a'), "Red", "Old.fails")
+            h.run("sweep", "schedule").getOrThrow()
+            val summary =
+                json.decodeFromString<RunSummary>(
+                    root.resolve("build/delivery/run-summary.json").readText()
+                )
+            assertContains(summary.deliveries, "red (see streak)")
+            assertTrue(summary.actionNeeded.isEmpty())
+            assertEquals(1, h.issues.size)
+            assertContains(h.issues.single().string("body"), ":red-streak -->")
+        }
+
+    @Test
+    fun `legacy verification incident closes completed with streak pointer and preserves notes`() =
+        temp { root ->
+            val h = DeliveryToolHarness(root)
+            h.tip = DeliveryToolHarness.sha('a')
+            val github = GitHub("owner/repo", h.commands, emptyMap())
+            GitHubIncidents(github, config.incidentMarker, "trunk").sync(
+                listOf(
+                    SweepFinding(
+                        IncidentSubject.BetaCommit(h.tip),
+                        "not delivered",
+                        "Deliver it: old advice",
+                    )
+                ),
+                h.tip,
+            ) {
+                true
+            }
+            val legacy = h.issues.single()
+            h.issues[0] =
+                JsonObject(
+                    legacy + ("body" to JsonPrimitive("Human note\n" + legacy.string("body")))
+                )
+            h.red(h.tip, "Red", "Old.fails")
+            val closed = h.issues.single { it.string("number") == legacy.string("number") }
+            assertEquals("closed", closed.string("state"))
+            assertEquals("completed", closed.string("state_reason"))
+            assertContains(
+                closed.string("body"),
+                "https://github.com/owner/repo/issues/${h.streak().string("number")}",
+            )
+            assertTrue(closed.string("body").startsWith("Human note\n"))
+        }
+
+    @Test
+    fun `never attempted harness tip uses the current caller delivery hint`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        h.run("finishRun", "push").getOrThrow()
+        val issue = h.issues.single()
+        assertContains(
+            issue.string("body"),
+            "gh workflow run ship-it.yml -f operation=deliver -f sha=${h.tip}",
+        )
+    }
+
+    @Test
     fun `resolution records elapsed time distinct red commits and preserves human notes on replay`() =
         temp { root ->
             val h = DeliveryToolHarness(root)
@@ -315,7 +428,7 @@ class RedStreaksTest {
         assertEquals(IncidentSubject.RedStreak, IncidentSubject.fromKey("red-streak"))
         assertFalse(IncidentSubject.RedStreak.ownerOnly)
         assertEquals("open", issue.string("state"))
-        assertTrue(
+        assertFalse(
             h.issues.any {
                 "<!-- ${config.incidentMarker}:internal/${h.tip} -->" in it.string("body")
             }

@@ -6,10 +6,10 @@ import kotlinx.serialization.json.*
 internal fun actionWorkflowRoles(text: String, repository: String): Set<String> {
     val compositeRoles =
         mapOf(
-            "testflight" to "testflight-delivery.yml",
-            "maintenance" to "maintenance.yml",
-            "app-store-release" to "app-store-release.yml",
-            "app-store-rollout" to "app-store-release.yml",
+            "testflight" to "testflight",
+            "maintenance" to "maintenance",
+            "app-store-release" to "app-store-release",
+            "app-store-rollout" to "app-store-release",
         )
     val composite = Regex("${Regex.escape(repository)}/([a-z-]+)@[^\\s@]+")
     val jobs = yamlMapping(workflowDocument(text)["jobs"])

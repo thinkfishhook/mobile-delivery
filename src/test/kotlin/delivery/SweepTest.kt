@@ -6,6 +6,50 @@ import org.junit.Test
 
 class SweepTest {
     @Test
+    fun `stale red coverage does not hide an uncertain build attempt`() = temp { output ->
+        val world = World(output)
+        world.apple.uploadOutcome = "INVISIBLE"
+        assertFails { world.deliver(sha) }
+        val interrupted =
+            world
+                .sweep(redStreak = { "https://github.com/owner/repo/issues/7" })
+                .run(sha)
+                .findings
+                .first()
+        assertNotEquals("red (see streak)", interrupted.outcome)
+        assertContains(interrupted.outcome, "uncertain")
+    }
+
+    @Test
+    fun `red tip covered by a streak has no operator action`() = temp { output ->
+        val world = World(output)
+        val report = world.sweep(redStreak = { "https://github.com/owner/repo/issues/7" }).run(sha)
+        val finding = report.findings.first()
+        assertEquals("red (see streak)", finding.outcome)
+        assertNull(finding.operatorAction)
+        assertFalse(report.needsAction)
+    }
+
+    @Test
+    fun `never attempted tip still asks to deliver using actual caller workflow`() =
+        temp { output ->
+            val world = World(output)
+            val hints =
+                WorkflowHints(
+                    mapOf(
+                        "GITHUB_WORKFLOW_REF" to
+                            "owner/repo/.github/workflows/ship-custom.yaml@main"
+                    )
+                )
+            val finding = world.sweep(hints = hints).run(sha).findings.first()
+            assertEquals("not delivered", finding.outcome)
+            assertEquals(
+                "Deliver it: gh workflow run ship-custom.yaml -f operation=deliver -f sha=$sha",
+                finding.operatorAction,
+            )
+        }
+
+    @Test
     fun `finding serialization and summary keep the exact operation key strings`() =
         temp { output ->
             val world = World(output)

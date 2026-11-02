@@ -105,24 +105,34 @@ class GitHubIncidents(
                     )
             }
         }
+        val streak = open[IncidentSubject.RedStreak]
+        val redCommits = streak?.let { redStreakCommits(it.string("body"), owner) }.orEmpty()
         (open - problems.keys).forEach { (key, issue) ->
             if (!checked(key)) return@forEach
+            val covered =
+                key is IncidentSubject.BetaCommit &&
+                    redCommits.any {
+                        it.sha == key.sha || (it.sha.length == 12 && key.sha.startsWith(it.sha))
+                    }
             val superseded =
-                when (key) {
-                    is IncidentSubject.BetaCommit -> key.sha != tip
-                    is IncidentSubject.AppStoreVersion,
-                    is IncidentSubject.ReviewSubmission,
-                    is IncidentSubject.Credential,
-                    is IncidentSubject.Hold,
-                    is IncidentSubject.Receipt,
-                    IncidentSubject.RedStreak,
-                    IncidentSubject.Audit,
-                    IncidentSubject.AppStore,
-                    IncidentSubject.Incidents,
-                    is IncidentSubject.Unknown -> false
-                }
+                !covered &&
+                    when (key) {
+                        is IncidentSubject.BetaCommit -> key.sha != tip
+                        is IncidentSubject.AppStoreVersion,
+                        is IncidentSubject.ReviewSubmission,
+                        is IncidentSubject.Credential,
+                        is IncidentSubject.Hold,
+                        is IncidentSubject.Receipt,
+                        IncidentSubject.RedStreak,
+                        IncidentSubject.Audit,
+                        IncidentSubject.AppStore,
+                        IncidentSubject.Incidents,
+                        is IncidentSubject.Unknown -> false
+                    }
             val resolution =
-                if (superseded) "Superseded by $branch $tip; this commit was not delivered."
+                if (covered)
+                    "Verification failure tracked in https://github.com/${github.repo}/issues/${streak!!.string("number")}."
+                else if (superseded) "Superseded by $branch $tip; this commit was not delivered."
                 else "Resolved; the last sweep found nothing to do."
             github.api(
                 "issues/${issue.string("number")}",

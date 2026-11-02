@@ -33,6 +33,7 @@ class Sweep(
     private val queuedPush: (String) -> Boolean,
     private val hints: WorkflowHints = WorkflowHints(emptyMap()),
     private val onDelivered: (String, Trace) -> Unit = { _, _ -> },
+    private val redStreak: (String) -> String? = { null },
 ) {
     fun run(tip: String, audit: Boolean = false): SweepReport {
         val findings = mutableListOf<SweepFinding>()
@@ -126,12 +127,13 @@ class Sweep(
         if (traces.latest?.receiptTarget == tip) return SweepFinding(key, "delivered")
         val latest = traces.latest
         return when {
+            latest == null && redStreak(tip) != null -> SweepFinding(key, "red (see streak)")
             latest == null && queuedPush(tip) -> SweepFinding(key, "queued")
             latest == null ->
                 SweepFinding(
                     key,
                     "not delivered",
-                    "Deliver it: ${hints.command("testflight-delivery.yml", "-f operation=deliver -f sha=$tip")}",
+                    "Deliver it: ${hints.deliver(tip)}",
                 )
             latest.state == TraceState.UNCERTAIN -> SweepFinding(key, latest.detail)
             else ->

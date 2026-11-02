@@ -460,7 +460,7 @@ class AppStoreRelease(
                     if (version in facts.unresolved)
                         "Hold #${hold.issue} covers ${version.version}, which is ${version.state}. Remove it from review in App Store Connect."
                     else
-                        "Hold #${hold.issue} covers ${version.version}, which is rolling out. Pause it: ${hints.command("app-store-release.yml", "-f operation=pause -f reason=\"Hold #${hold.issue}\"")}",
+                        "Hold #${hold.issue} covers ${version.version}, which is rolling out. Pause it: ${hints.command("app-store-release", "-f operation=pause -f reason=\"Hold #${hold.issue}\"")}",
                 )
         }
         return findings

@@ -19,10 +19,10 @@ class WorkflowHintsTest {
                 commands,
                 env + ("GITHUB_WORKFLOW_REF" to "owner/repo/.github/workflows/my-release.yml@main"),
             )
-        val current = github.workflowHints("app-store-release.yml")
+        val current = github.workflowHints("app-store-release")
         assertEquals(
             "gh workflow run my-release.yml -f operation=pause",
-            current.command("app-store-release.yml", "-f operation=pause"),
+            current.command("app-store-release", "-f operation=pause"),
         )
         assertTrue(commands.calls.isEmpty())
         val row = """{"path":".github/workflows/ship.yml","head_sha":"${"a".repeat(40)}"}"""
@@ -60,7 +60,7 @@ class WorkflowHintsTest {
             "gh workflow run ship-custom.yml -f operation=deliver",
             GitHub("owner/repo", commands, env)
                 .workflowHints()
-                .command("testflight-delivery.yml", "-f operation=deliver"),
+                .command("testflight", "-f operation=deliver"),
         )
     }
 
@@ -76,7 +76,7 @@ class WorkflowHintsTest {
             "https://github.com/owner/repo/actions",
             GitHub("owner/repo", commands, env)
                 .workflowHints()
-                .command("app-store-release.yml", "-f operation=pause"),
+                .command("app-store-release", "-f operation=pause"),
         )
         commands.respond = { throw CommandError("unavailable") }
         assertEquals(

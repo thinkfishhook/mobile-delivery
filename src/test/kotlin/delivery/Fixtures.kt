@@ -486,7 +486,11 @@ class World(val output: Path, val at: Clock = clock) {
 
     fun symbols() = ReleaseSymbols(artifacts.forRun("release"), FakeReleases(), output)
 
-    fun sweep(incidents: Incidents = this.incidents) =
+    fun sweep(
+        incidents: Incidents = this.incidents,
+        redStreak: (String) -> String? = { null },
+        hints: WorkflowHints = WorkflowHints(env("sweep")),
+    ) =
         Sweep(
             config,
             beta(),
@@ -496,7 +500,8 @@ class World(val output: Path, val at: Clock = clock) {
             source,
             incidents,
             { it in queued },
-            WorkflowHints(env("sweep")),
+            hints,
+            redStreak = redStreak,
         )
 
     // One delivery job: decide, build, retain, upload, as the workflow runs them.

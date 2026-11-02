@@ -203,7 +203,7 @@ internal fun GitHub.deliveryRuns(sha: String? = null): List<JsonObject> {
             "actions/runs?event=push${sha?.let { "&head_sha=$it" }.orEmpty()}",
             "workflow_runs",
         )
-        .filter { run -> runUsesWorkflow(run, "testflight-delivery.yml") }
+        .filter { run -> runUsesWorkflow(run, "testflight") }
 }
 
 fun GitHub.queuedPush(sha: String) =

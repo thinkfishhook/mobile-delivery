@@ -8,7 +8,19 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
 @Serializable
-internal data class RedStreakCommit(val sha: String, val subject: String, val runUrl: String)
+internal data class RedStreakCommit(
+    val sha: String,
+    val subject: String,
+    val runUrl: String,
+    val runAttempt: Int = 1,
+)
+
+internal fun redStreakCommits(body: String, owner: String): List<RedStreakCommit> {
+    val content = OwnedStatusBlock(owner).content(body) ?: return emptyList()
+    val marker = "<!-- $owner-red-commits: "
+    if (marker !in content) return emptyList()
+    return json.decodeFromString(content.substringAfter(marker).substringBefore(" -->"))
+}
 
 private fun redStreakText(text: String) =
     text.replace("\r", " ").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
@@ -110,6 +122,28 @@ class RedStreaks(
             }
         require(issues.size <= 1) { "Duplicate owned red-streak incident" }
         return issues.singleOrNull()
+    }
+
+    internal fun covering(sha: String): String? {
+        val issue = open() ?: return null
+        val recorded =
+            redStreakCommits(issue.string("body"), owner).lastOrNull { it.sha == sha }
+                ?: return null
+        val latest =
+            github
+                .pages("actions/runs?head_sha=$sha", "workflow_runs")
+                .filter { github.runUsesWorkflow(it, "testflight") }
+                .maxWithOrNull(
+                    compareBy<JsonObject> { it.string("id").toLong() }
+                        .thenBy { it["run_attempt"]?.jsonPrimitive?.intOrNull ?: 1 }
+                )
+        if (
+            latest != null &&
+                (latest.string("id") != recorded.runUrl.substringAfterLast('/') ||
+                    (latest["run_attempt"]?.jsonPrimitive?.intOrNull ?: 1) != recorded.runAttempt)
+        )
+            return null
+        return "https://github.com/${github.repo}/issues/${issue.string("number")}"
     }
 
     internal fun closeDelivered(sha: String, build: String) {
