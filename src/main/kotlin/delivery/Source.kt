@@ -27,6 +27,25 @@ class GitSource(
     fun git(vararg args: String): String =
         commands.run(listOf("git", *args), cwd = root, env = buildEnvironment()).trim()
 
+    fun refreshBranchTip(env: Map<String, String>): String {
+        commands.run(
+            listOf(
+                "git",
+                "-c",
+                "credential.helper=",
+                "-c",
+                "credential.helper=!gh auth git-credential",
+                "fetch",
+                "--no-tags",
+                "origin",
+                "+refs/heads/$branch:refs/remotes/origin/$branch",
+            ),
+            cwd = root,
+            env = toolEnvironment(env, "GH_TOKEN", "GITHUB_TOKEN") + ("GIT_TERMINAL_PROMPT" to "0"),
+        )
+        return git("rev-parse", "origin/$branch")
+    }
+
     override fun commits(baseline: String, tip: String): List<String> {
         git("merge-base", "--is-ancestor", baseline, tip)
         return git("rev-list", "--reverse", "--topo-order", "$baseline..$tip")

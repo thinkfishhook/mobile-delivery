@@ -9,6 +9,7 @@ class DeliveryToolHarness(val root: Path) {
     var tip = sha('b')
     var remoteTip: String? = null
     var failBranchRead = false
+    var failBranchFetch = false
     val counts = mutableMapOf<String, Int>()
     val issues = mutableListOf<JsonObject>()
     var failIssueWrites = false
@@ -40,6 +41,13 @@ class DeliveryToolHarness(val root: Path) {
 
     private fun git(args: List<String>): CommandResult =
         when {
+            args.first() == "-c" -> git(args.drop(2))
+            args.first() == "fetch" ->
+                if (failBranchFetch) CommandResult(1, "", "fetch failed")
+                else {
+                    tip = remoteTip ?: tip
+                    ok("")
+                }
             args.first() == "rev-parse" ->
                 ok(if (args[1] == "origin/${"trunk"}") tip else args[1].removeSuffix("^{commit}"))
             args.first() == "merge-base" -> ok("")

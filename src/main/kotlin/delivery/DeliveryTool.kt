@@ -122,8 +122,11 @@ class DeliveryTool(
         val pushStart = mode == "startRun" && env["GITHUB_EVENT_NAME"] == "push"
         // checkout can reset origin/branch to a queued event's commit even after the branch moves.
         val healthTip =
-            if (pushStart) github.currentBranchTip(branch)
-            else source.git("rev-parse", "origin/${branch}")
+            when {
+                mode in setOf("sweep", "audit", "finishRun") -> source.refreshBranchTip(env)
+                pushStart -> github.currentBranchTip(branch)
+                else -> source.git("rev-parse", "origin/${branch}")
+            }
         // A queued push that the branch has moved past is dropped before any record or Apple work.
         // Explicit dispatches may still select older SHAs.
         if (pushStart && selected != healthTip) {
