@@ -17,6 +17,8 @@ class DeliveryTool(
     private val commands: Commands,
     private val env: Map<String, String>,
 ) {
+    private val receiptProblems = linkedMapOf<String, String>()
+    private val credentialRepairErrors = mutableListOf<String>()
     private var summaryWritten = false
     private val apple = Asc(config, commands, env)
 
@@ -63,7 +65,15 @@ class DeliveryTool(
                 }
             )
         val source = GitSource(root, config, commands, branch)
-        val tags = GitHubReceiptTags(github)
+        val tags =
+            GitHubReceiptTags(github).apply {
+                onCredentialProblem = { problem ->
+                    if (receiptProblems.put(problem.secret, problem.message!!) == null) {
+                        credentialRepairErrors +=
+                            publishCredentialProblem(problem, config, commands, env)
+                    }
+                }
+            }
         val artifacts = GitHubBuildArtifacts(github, env["GITHUB_RUN_ID"] ?: "local")
         val symbols =
             ReleaseSymbols(
@@ -170,6 +180,16 @@ class DeliveryTool(
                 }
                 "uploadBeta" -> {
                     val receipt = beta.upload(intent(event, selected), output)
+                    if (receipt != null && receiptProblems.isNotEmpty()) {
+                        writeSummary(
+                            RunSummary(
+                                "completed",
+                                "Delivered to TestFlight ${receipt.version}/${receipt.number}",
+                                emptyList(),
+                                emptyList(),
+                            )
+                        )
+                    }
                     outputs(
                         "published=${receipt != null}\nversion=${receipt?.version ?: ""}\nbuild=${receipt?.number ?: ""}\n"
                     )
@@ -322,7 +342,18 @@ class DeliveryTool(
 
     private fun writeSummary(summary: RunSummary) {
         summaryWritten = true
-        writeRunSummary(root, env, summary.copy(ignoredVersions = apple.ignoredVersions.sorted()))
+        writeRunSummary(
+            root,
+            env,
+            summary.copy(
+                deliveries =
+                    summary.deliveries +
+                        if (receiptProblems.isEmpty()) "" else "; receipts weren't written",
+                actionNeeded = (summary.actionNeeded + receiptProblems.values).distinct(),
+                repairErrors = summary.repairErrors + credentialRepairErrors,
+                ignoredVersions = apple.ignoredVersions.sorted(),
+            ),
+        )
     }
 
     private fun report(sweep: Sweep, result: SweepReport, failed: Boolean) {

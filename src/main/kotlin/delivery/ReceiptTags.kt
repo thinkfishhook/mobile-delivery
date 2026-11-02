@@ -33,6 +33,8 @@ fun requireReceiptNames(prefix: String, names: Set<String>): Set<String> = names
 }
 
 class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
+    internal var onCredentialProblem: (CredentialProblem) -> Unit = {}
+
     // matching-refs ignores paging parameters and always returns every match.
     override fun names(prefix: String): Set<String> =
         github
@@ -53,6 +55,17 @@ class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
     }
 
     override fun write(tag: String, sha: String, receipt: Receipt) {
+        try {
+            writeReceipt(tag, sha, receipt)
+        } catch (error: GitHubApiError) {
+            val problem =
+                receiptCredentialProblem(error, github.receiptTokenExpiration) ?: throw error
+            onCredentialProblem(problem)
+            throw problem
+        }
+    }
+
+    private fun writeReceipt(tag: String, sha: String, receipt: Receipt) {
         val manifest = json.encodeToJsonElement(receipt)
         // Same commit and same Apple build; other fields may differ, because a receipt repaired
         // by a sweep holds only Apple facts.
@@ -104,6 +117,12 @@ class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
                 receiptToken = true,
             )
         } catch (error: Exception) {
+            // Authentication failures cannot be repaired by reading the same ref again.
+            if (
+                error is GitHubApiError &&
+                    receiptCredentialProblem(error, github.receiptTokenExpiration) != null
+            )
+                throw error
             val written =
                 github.api("git/ref/tags/$tag", missing = true, receiptToken = true)?.jsonObject
                     ?: throw error

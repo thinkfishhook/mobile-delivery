@@ -11,6 +11,9 @@ class GitHub(
     internal val env: Map<String, String>,
     private val sleep: (Long) -> Unit = Thread::sleep,
 ) {
+    internal var receiptTokenExpiration: String? = null
+        private set
+
     internal val actionRoleCache = mutableMapOf<String, Set<String>>()
 
     fun currentBranchTip(branch: String): String {
@@ -95,6 +98,19 @@ class GitHub(
             val headers =
                 if (normalized.startsWith("HTTP/")) normalized.substringBefore("\n\n") else ""
             val body = if (headers.isEmpty()) normalized else normalized.substringAfter("\n\n", "")
+            val responseHeaders =
+                headers
+                    .lineSequence()
+                    .drop(1)
+                    .filter { ':' in it }
+                    .associate {
+                        it.substringBefore(':').trim().lowercase() to it.substringAfter(':').trim()
+                    }
+            if (receiptToken && token != null) {
+                responseHeaders["github-authentication-token-expiration"]?.let {
+                    receiptTokenExpiration = safeTokenExpiration(it) ?: receiptTokenExpiration
+                }
+            }
             if (result.exit == 0)
                 return body.takeIf { it.isNotBlank() }?.let { json.parseToJsonElement(it) }
             val status =
@@ -130,14 +146,7 @@ class GitHub(
                     path,
                     status,
                     message,
-                    headers
-                        .lineSequence()
-                        .drop(1)
-                        .filter { ':' in it }
-                        .associate {
-                            it.substringBefore(':').trim().lowercase() to
-                                it.substringAfter(':').trim()
-                        },
+                    responseHeaders,
                     result.exit,
                     transient,
                     retryAfter,

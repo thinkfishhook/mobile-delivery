@@ -5,7 +5,7 @@ package delivery
 class GitHubApiError(
     val path: String,
     val status: Int?,
-    message: String,
+    val apiMessage: String,
     val headers: Map<String, String>,
     exitCode: Int = 1,
     transient: Boolean = false,
@@ -13,7 +13,7 @@ class GitHubApiError(
     labelAlreadyExists: Boolean = false,
 ) :
     GitHubFailure(
-        "GitHub API failed: ${path.substringBefore('?')} (${status?.let { "HTTP $it" } ?: "exit $exitCode"}${if (message.isEmpty()) "" else ": " + message.replace(Regex("\\s+"), " ").take(1000)})",
+        "GitHub API failed: ${path.substringBefore('?')} (${status?.let { "HTTP $it" } ?: "exit $exitCode"}${if (apiMessage.isEmpty()) "" else ": " + apiMessage.replace(Regex("\\s+"), " ").take(1000)})",
         transient,
         retryAfterMs,
         labelAlreadyExists,
