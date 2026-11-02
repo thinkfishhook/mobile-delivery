@@ -61,7 +61,7 @@ class XcresultTest {
     }
 
     private fun totals(fixture: String) =
-        xcresultTotals(Path.of("$fixture.xcresult"), resource("xcresult/$fixture.json"))
+        XcresultReport(Path.of("$fixture.xcresult")).totals(resource("xcresult/$fixture.json"))
 
     private fun verifier(commands: Commands) =
         Verification(

@@ -106,18 +106,23 @@ class BoundaryTest {
         fun summary(total: Int, failed: Int, skipped: Int = 0) =
             """{"title":"t","totalTestCount":$total,"passedTests":${total - failed},""" +
                 """"failedTests":$failed,"skippedTests":$skipped,"expectedFailures":0}"""
-        assertEquals(TestTotals(12, 0, 0, 0), xcresultTotals(bundle, summary(12, 0)))
+        assertEquals(TestTotals(12, 0, 0, 0), XcresultReport(bundle).totals(summary(12, 0)))
         assertEquals(
             FailureKind.VALIDATION,
-            assertFailsWith<VerificationFailure> { xcresultTotals(bundle, summary(12, 1)) }.kind,
+            assertFailsWith<VerificationFailure> { XcresultReport(bundle).totals(summary(12, 1)) }
+                .kind,
         )
         assertEquals(
             FailureKind.VALIDATION,
-            assertFailsWith<VerificationFailure> { xcresultTotals(bundle, summary(12, 0, 2)) }.kind,
+            assertFailsWith<VerificationFailure> {
+                    XcresultReport(bundle).totals(summary(12, 0, 2))
+                }
+                .kind,
         )
         assertEquals(
             FailureKind.INFRASTRUCTURE,
-            assertFailsWith<VerificationFailure> { xcresultTotals(bundle, summary(0, 0)) }.kind,
+            assertFailsWith<VerificationFailure> { XcresultReport(bundle).totals(summary(0, 0)) }
+                .kind,
         )
     }
 
@@ -221,7 +226,7 @@ class BoundaryTest {
 
     @Test
     fun `missing failed skipped or empty reports fail and suites aggregate`() = temp { root ->
-        assertFails { reportTotals(root) }
+        assertFails { JUnitReport(root).totals() }
         listOf(
                 "tests=\"0\"",
                 "tests=\"2\" skipped=\"1\"",
@@ -230,11 +235,11 @@ class BoundaryTest {
             )
             .forEach {
                 root.resolve("TEST-a.xml").writeText("<testsuite $it/>")
-                assertFails { reportTotals(root) }
+                assertFails { JUnitReport(root).totals() }
             }
         listOf("a", "b").forEach {
             root.resolve("TEST-$it.xml").writeText("<testsuite tests=\"3\"/>")
         }
-        assertEquals(TestTotals(6, 0, 0, 0), reportTotals(root))
+        assertEquals(TestTotals(6, 0, 0, 0), JUnitReport(root).totals())
     }
 }
