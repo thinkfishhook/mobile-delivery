@@ -1,5 +1,6 @@
 package delivery
 
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.*
 import kotlinx.serialization.Serializable
@@ -39,56 +40,77 @@ class Verification(
         val reports = config.verification.testReports.map { it to TestReport.resolve(source, it) }
         // Reports from an earlier run must not stand in for this one.
         reports.forEach { (_, report) -> report.path.toFile().deleteRecursively() }
+        val totals = linkedMapOf<String, TestTotals>()
         try {
             config.verification.commands.forEach { command ->
-                println("Running ${command.joinToString(" ")}")
                 log.appendText("Running ${command.joinToString(" ")}\n")
-                try {
-                    commands.run(
-                        command,
-                        cwd = source,
-                        env = appEnvironment(env, config.buildEnvironment),
-                        log = log,
-                    )
-                } catch (error: CommandError) {
-                    val tail = log.useLines { lines ->
-                        val last = ArrayDeque<String>()
-                        lines.forEach { line ->
-                            if (last.size == tailLines) last.removeFirst()
-                            last.addLast(line)
-                        }
-                        last.joinToString("\n")
-                    }
-                    val failingCommand = FailingCommand(command.joinToString(" "), error.exit, tail)
-                    println(
-                        "::group::Output tail: ${failingCommand.command.replace("\r", " ").replace("\n", " ")}"
-                    )
-                    // The runner recognises workflow commands even after ordinary text.
-                    tail.lineSequence().forEach { line ->
-                        println(line.replace("::", ": :"))
-                    }
-                    println("::endgroup::")
-                    val text = log.readText()
-                    val validation =
-                        Regex(
-                                "(?m)^e: |[0-9]+ tests completed, [1-9]|Analysis failed with|" +
-                                    "There were failing tests|\\*\\* TEST FAILED \\*\\*|" +
-                                    "error: .*\\.swift"
-                            )
-                            .containsMatchIn(text)
-                    throw VerificationFailure(
-                        "application-checks",
-                        if (validation) FailureKind.VALIDATION else FailureKind.INFRASTRUCTURE,
-                        error.displayMessage().orEmpty(),
-                        failingCommand = failingCommand,
-                    )
+                val before = reports.associate { (name, report) ->
+                    name to report.path.reportSnapshot()
                 }
+                val result =
+                    try {
+                        commands.runResult(
+                            command,
+                            cwd = source,
+                            env = appEnvironment(env, config.buildEnvironment),
+                            log = log,
+                        )
+                    } catch (error: CommandError) {
+                        val tail = log.useLines { lines ->
+                            val last = ArrayDeque<String>()
+                            lines.forEach { line ->
+                                if (last.size == tailLines) last.removeFirst()
+                                last.addLast(line)
+                            }
+                            last.joinToString("\n")
+                        }
+                        val failingCommand =
+                            FailingCommand(command.joinToString(" "), error.exit, tail)
+                        println(
+                            "::group::Output tail: ${failingCommand.command.replace("\r", " ").replace("\n", " ")}"
+                        )
+                        // The runner recognises workflow commands even after ordinary text.
+                        tail.lineSequence().forEach { line ->
+                            println(line.replace("::", ": :"))
+                        }
+                        println("::endgroup::")
+                        val text = log.readText()
+                        val validation =
+                            Regex(
+                                    "(?m)^e: |[0-9]+ tests completed, [1-9]|Analysis failed with|" +
+                                        "There were failing tests|\\*\\* TEST FAILED \\*\\*|" +
+                                        "error: .*\\.swift"
+                                )
+                                .containsMatchIn(text)
+                        throw VerificationFailure(
+                            "application-checks",
+                            if (validation) FailureKind.VALIDATION else FailureKind.INFRASTRUCTURE,
+                            error.displayMessage().orEmpty(),
+                            failingCommand = failingCommand,
+                        )
+                    }
+                reports.filter { !it.second.path.exists() }.forEach { totals.remove(it.first) }
+                val produced =
+                    reports
+                        .filter { (name, report) ->
+                            report.path.exists() &&
+                                report.path.reportSnapshot() != before.getValue(name)
+                        }
+                        .associate { (name, report) -> name to report.totals(commands, env) }
+                totals.putAll(produced)
+                val reportSummary =
+                    produced.entries.joinToString("") { (name, count) ->
+                        " — $name: ${count.tests} passed"
+                    }
+                println(
+                    "✓ ${command.joinToString(" ")} — ${commandDuration(result.elapsedMillis)}$reportSummary"
+                )
             }
-            val totals = reports.associate { (name, report) ->
-                name to report.totals(commands, env)
+            // Preserve the final gate: every configured report must have been produced.
+            reports.forEach { (name, report) ->
+                totals.getOrPut(name) { report.totals(commands, env) }
             }
             output.resolve("tests.json").writeText(json.encodeToString(totals) + "\n")
-            println(json.encodeToString(totals))
         } catch (error: Exception) {
             val failures =
                 reports
@@ -150,3 +172,24 @@ interface BuildOperations {
 }
 
 @Serializable data class FailingCommand(val command: String, val exit: Int?, val tail: String)
+
+private fun Path.reportSnapshot(): Map<Path, Pair<java.nio.file.attribute.FileTime, Long>> {
+    if (!exists()) return emptyMap()
+    return Files.walk(this).use { paths ->
+        paths.toList().associateWith {
+            it.getLastModifiedTime() to if (it.isRegularFile()) it.fileSize() else 0L
+        }
+    }
+}
+
+internal fun commandDuration(milliseconds: Long): String {
+    val seconds = milliseconds / 1000
+    val hours = seconds / 3600
+    val minutes = seconds / 60 % 60
+    return when {
+        hours > 0 ->
+            "${hours}h${minutes.toString().padStart(2, '0')}m${(seconds % 60).toString().padStart(2, '0')}s"
+        minutes > 0 -> "${minutes}m${(seconds % 60).toString().padStart(2, '0')}s"
+        else -> "${seconds}s"
+    }
+}

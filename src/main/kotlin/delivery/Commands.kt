@@ -16,7 +16,12 @@ internal fun Throwable.displayMessage(): String? = message?.let { text ->
 
 class ArtifactError(message: String) : CommandError(message)
 
-data class CommandResult(val exit: Int, val stdout: String, val stderr: String)
+data class CommandResult(
+    val exit: Int,
+    val stdout: String,
+    val stderr: String,
+    val elapsedMillis: Long = 0,
+)
 
 interface Commands {
     fun execute(
@@ -29,7 +34,10 @@ interface Commands {
     ): CommandResult
 }
 
-class ProcessCommands : Commands {
+class ProcessCommands(nanoTime: () -> Long = System::nanoTime) :
+    Commands by TimedCommands(ProcessExecutor(), nanoTime)
+
+private class ProcessExecutor : Commands {
     override fun execute(
         args: List<String>,
         cwd: Path?,
@@ -68,14 +76,14 @@ class ProcessCommands : Commands {
     }
 }
 
-fun Commands.run(
+fun Commands.runResult(
     args: List<String>,
     cwd: Path? = null,
     env: Map<String, String> = System.getenv(),
     input: String? = null,
     log: Path? = null,
     timeoutSeconds: Long = 21600,
-): String {
+): CommandResult {
     val result = execute(args, cwd, env, input, log, timeoutSeconds)
     if (result.exit != 0)
         throw CommandError(
@@ -83,8 +91,17 @@ fun Commands.run(
             exit = result.exit,
             log = log,
         )
-    return result.stdout
+    return result
 }
+
+fun Commands.run(
+    args: List<String>,
+    cwd: Path? = null,
+    env: Map<String, String> = System.getenv(),
+    input: String? = null,
+    log: Path? = null,
+    timeoutSeconds: Long = 21600,
+): String = runResult(args, cwd, env, input, log, timeoutSeconds).stdout
 
 fun buildEnvironment(env: Map<String, String> = System.getenv()): Map<String, String> {
     val allowed =
@@ -165,3 +182,22 @@ inline fun <T> attemptEffect(action: () -> T): Result<T> =
     } catch (error: Exception) {
         Result.failure(error)
     }
+
+// Measure process execution at the seam, excluding report parsing and log rendering.
+class TimedCommands(
+    private val delegate: Commands,
+    private val nanoTime: () -> Long = System::nanoTime,
+) : Commands {
+    override fun execute(
+        args: List<String>,
+        cwd: Path?,
+        env: Map<String, String>,
+        input: String?,
+        log: Path?,
+        timeoutSeconds: Long,
+    ): CommandResult {
+        val start = nanoTime()
+        val result = delegate.execute(args, cwd, env, input, log, timeoutSeconds)
+        return result.copy(elapsedMillis = ((nanoTime() - start) / 1_000_000).coerceAtLeast(0))
+    }
+}
