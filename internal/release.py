@@ -35,10 +35,14 @@ def version(tag):
 
 
 def notes(changelog, tag):
-    version(tag)
-    match = re.search(rf"^## \[{re.escape(tag[1:])}\] - \d{{4}}-\d{{2}}-\d{{2}}\s*\n(.*?)(?=^## |\Z)", changelog, re.MULTILINE | re.DOTALL)
+    selected = version(tag)
+    match = re.search(rf"^## \[{re.escape(tag[1:])}\] - \d{{4}}-\d{{2}}-\d{{2}}[ \t]*\n(.*?)(?=^## |\Z)", changelog, re.MULTILINE | re.DOTALL)
+    if not match and selected.prerelease:
+        # Rehearse the upcoming stable release before its cutover date is known.
+        upcoming = ".".join(str(number) for number in selected.numbers)
+        match = re.search(rf"^## \[{re.escape(upcoming)}\](?: - \d{{4}}-\d{{2}}-\d{{2}})?[ \t]*\n(.*?)(?=^## |\Z)", changelog, re.MULTILINE | re.DOTALL)
     if not match or not match[1].strip():
-        raise ValueError(f"Add a non-empty dated CHANGELOG.md section for [{tag[1:]}] before tagging")
+        raise ValueError(f"Add a non-empty dated CHANGELOG.md section for [{tag[1:]}] before tagging (candidates may use the upcoming stable section)")
     return match[1].strip()
 
 

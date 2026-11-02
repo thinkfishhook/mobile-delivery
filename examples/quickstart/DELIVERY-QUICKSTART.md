@@ -9,8 +9,8 @@ cp -R /path/to/mobile-delivery/examples/quickstart/. /path/to/app/
 Review existing files first: copying can replace workflows, a delivery configuration or
 Dependabot rules with the same names. Merge any existing rules you need to retain.
 Repository secrets and switches are set separately by the main README's Quick start.
-The actions pin the tested source revision for the v1 preview. Keep deployment disabled
-until your verification run succeeds.
+The actions pin a tested source revision; the cutover repoints them together to v1.0.0.
+Keep deployment disabled until your verification run succeeds.
 
 Every app-specific edit is marked `# CHANGE ME`. In YAML these are comments. JSON does
 not allow comments, so its markers are inside placeholder string values: replace the
@@ -36,9 +36,20 @@ example value, remove its marker. Never put secret values into these files.
    secret or secret-presence JSON is required. Leave this out when unnecessary.
 
 The four actions already use one complete commit SHA with its version comment.
-Keep them together when upgrading; Dependabot groups their updates. The hold form is
-ready to use. Maintenance creates its `testflight-hold` label when enabled; to file a hold
-earlier, create that label with `gh label create testflight-hold --force`.
+Keep them together when upgrading with `# vX.Y.Z` comments. The overlay Dependabot
+`groups` rule matches `thinkfishhook/mobile-delivery*`; retain it when merging existing
+Dependabot configuration. Review the changelog and verify the app before integrating.
+
+Receipt tags pushed with `IOS_RECEIPT_TOKEN` trigger workflows. Every app workflow
+with `on: push` must use `branches:` filters (as TestFlight does) or exclude both tag
+namespaces with `tags-ignore: ['deploy/**', 'submit/**']`. Audit existing CI too.
+For CI that runs on PRs, use integration-branch pushes plus `pull_request` so Dependabot
+PR commits run CI once. If keeping all branch pushes, add
+`branches-ignore: ['dependabot/**']` to the push mapping alongside `tags-ignore`.
+
+The hold form is ready to use. Maintenance creates its `testflight-hold` label when
+enabled; to file a hold earlier, create that label with
+`gh label create testflight-hold --force`.
 
 `stale.yml.example` is optional and inactive. If you use a stale bot, either copy its
 hold/incident exemptions into your existing policy or review its marked values and rename

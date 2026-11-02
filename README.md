@@ -1,5 +1,7 @@
 # mobile-delivery
 
+mobile-delivery v1 serves Fish Hook’s portfolio from the public
+[`thinkfishhook/mobile-delivery`](https://github.com/thinkfishhook/mobile-delivery) repository.
 Four GitHub Actions verify an iOS app, deliver it to TestFlight, reconcile delivery state,
 and manage App Store releases. They support native Xcode and Kotlin Multiplatform apps.
 Your repository owns the jobs, runners and secrets; each composite owns its delivery steps.
@@ -7,8 +9,8 @@ Your repository owns the jobs, runners and secrets; each composite owns its deli
 ## Quick start
 
 Start with delivery disabled. A push will build and test your app and retain its evidence.
-It will not upload a build. This checkout prepares v1; the examples pin a tested source
-revision, and v1.0.0 has not been released yet.
+It will not upload a build. The examples pin a tested source revision; the release
+cutover updates all four pins together to v1.0.0.
 
 You need an existing iOS app with passing automated tests, an App Store Connect API key,
 an Apple distribution certificate exported as a password-protected P12, an App Store
@@ -109,19 +111,58 @@ gh variable set IOS_APPSTORE_ENABLED --body true
 ```
 
 The next scheduled release may submit an eligible build. For a deliberate first automated
-submission, use `gh workflow run app-store-release.yml --ref main -f operation=promote
--f reason="First automated release" -f rollout=phased` as one command. Rollout controls
-live in `app-store-rollout.yml` and use their own queue. See the
+submission, run:
+
+```sh
+gh workflow run app-store-release.yml --ref main -f operation=promote -f reason="First automated release" -f rollout=phased
+```
+
+Rollout controls live in `app-store-rollout.yml` and use their own queue. See the
 [release acceptance steps](#enabling-app-store-release) for receipts and rollout checks.
 
 ## Upgrading
 
-The overlay includes weekly Dependabot updates for GitHub Actions and groups the four
-mobile-delivery references. Keep all four at the same full commit SHA with its version
-comment. Read [CHANGELOG.md](CHANGELOG.md), review the proposed diff, and run your app's
-verification before integrating. A stable major tag is available after v1 publication;
-full SHA pins keep the reviewed version fixed. The CLI zip on each release is for local
-bootstrap; the composites install and cache their engine automatically.
+The overlay includes weekly Dependabot GitHub Actions updates. Merge this group into
+any existing `.github/dependabot.yml` GitHub Actions entry:
+
+```yaml
+groups:
+  mobile-delivery:
+    patterns: ['thinkfishhook/mobile-delivery*']
+```
+
+Keep all four composites at the same full commit SHA with a `# vX.Y.Z` comment
+(for example `# v1.0.0`). Read [CHANGELOG.md](CHANGELOG.md), review the grouped diff,
+and run your app's verification before integrating. The cutover replaces the overlay's
+existing source pins with the v1.0.0 SHA and comment; a commit cannot contain its own SHA.
+The CLI zip on each release is for local bootstrap; composites install and cache their
+engine automatically.
+
+## Push and pull request triggers
+
+Receipt tags are pushed with `IOS_RECEIPT_TOKEN`, so they **do trigger workflows**.
+Check every app workflow with `on: push`, including CI unrelated to delivery. Prefer
+branch filters, as in the TestFlight overlay. To run CI once for a Dependabot PR,
+run branch pushes only on your integration branch and use `pull_request` for PR commits:
+
+```yaml
+on:
+  push:
+    branches: [main] # use your integration branch
+  pull_request:
+```
+
+If a workflow needs pushes on all branches, exclude both receipt namespaces:
+
+```yaml
+on:
+  push:
+    tags-ignore: ['deploy/**', 'submit/**']
+```
+
+For a workflow that also handles `pull_request`, add `branches-ignore: ['dependabot/**']`
+to that `push` mapping to avoid duplicate Dependabot CI. Tag exclusion alone does not
+prevent duplicate branch/PR runs. Do not add receipt tag triggers alongside branch filters.
 
 ## Where configuration belongs
 
@@ -342,7 +383,7 @@ Dispatch **TestFlight delivery** on the delivery branch for anything else:
 A refused `deliver` prints the exact retry command, for example:
 
 ```sh
-gh workflow run testflight.yml -f operation=retry -f sha=<sha> -f expected_attempt=404.1 -f reason="<why>"
+gh workflow run testflight.yml -f operation=retry -f sha="<sha>" -f expected_attempt=404.1 -f reason="<why>"
 ```
 
 To deliberately rebuild a commit that was already delivered, add `-f new_attempt=true`
@@ -398,8 +439,9 @@ problem, start from its `ios-delivery` incident or filter the runs to failures.
 
 Incidents are issues labelled `ios-delivery`, found by an owner marker in the body. A sweep
 opens one per problem, updates its status block (people's notes are kept), and closes it
-when the problem is gone, as superseded when the branch moved past that commit. Closed incidents
-are never read or reopened: a problem that comes back gets a new issue.
+when the problem is gone. Ordinary per-commit incidents close as superseded when the branch
+moves past that commit. Verification red streaks instead stay open until receipt-confirmed
+delivery; see below. Closed incidents are never reopened.
 
 For agent operators, `ios-delivery` identifies delivery incidents. Owner-only incidents also
 carry `needs-owner` and start with `Owner action required:`. Agents must skip `needs-owner`
@@ -515,7 +557,7 @@ cannot have. The token's expiry is shown to its owner under **Settings → Devel
 settings → Personal access tokens → Fine-grained tokens**, and GitHub emails the owner
 before it expires. When it lapses, receipt writes fail with `HTTP 401`. Deliveries still
 reach TestFlight, but sweeps go red with a repair error and a `record-repair` incident
-until the secret is replaced (`gh secret set IOS_RECEIPT_TOKEN`); the next sweep then
+until the secret is replaced (`gh secret set IOS_RECEIPT_TOKEN --env ios-delivery`); the next sweep then
 writes the missing tags.
 
 ## App Store release
@@ -612,22 +654,20 @@ See [DESIGN-holds.md](DESIGN-holds.md) for the general hold design.
 
 ### Enabling App Store release
 
-1. Let any version already in review in App Store Connect finish, or remove it from review.
-   The enabled maintenance sweep creates missing `testflight-hold`, `ios-delivery` and `needs-owner` labels.
-2. Dispatch **Delivery maintenance** with `app-store-preflight`. Check the build it would
-   select, the first rule each of the three newest builds fails, whether its dSYMs can be
-   kept, and the metadata source validation (the last released version).
-3. Check that `IOS_RECEIPT_TOKEN` will not expire soon.
-4. `gh variable set IOS_APPSTORE_ENABLED --body true` and `gh workflow enable app-store-release.yml`.
-5. First controlled release:
-   `gh workflow run app-store-release.yml -f operation=promote -f reason="First pipeline release" -f rollout=phased`.
-   Expect `submitted <version>/<build> (phased)`, the version waiting for review with a
-   phased release in App Store Connect, and a `submit/appstore/…` tag.
-6. After Apple releases it, the sweep reports `phased rollout active, day 1 (1%)` and writes
-   `deploy/appstore/…`. Dispatch `pause`, confirm the sweep reports it paused, then
-   dispatch `resume`.
-7. To turn it off again: `gh variable set IOS_APPSTORE_ENABLED --body false` and
-   `gh workflow disable app-store-release.yml`.
+Follow [Enable the App Store](#enable-the-app-store) for prerequisites, preflight and
+switch setup. Once enabled, check the first controlled release:
+
+1. Expect `submitted <version>/<build> (phased)`, the version waiting for review with a
+   phased release in App Store Connect, and a `submit/appstore/…` receipt tag.
+2. After Apple releases it, confirm the sweep reports `phased rollout active, day 1 (1%)`
+   and writes `deploy/appstore/…`. Dispatch `pause`, confirm the sweep reports it paused,
+   then dispatch `resume`, using the [rollout commands](#app-store-release) above.
+3. To turn it off again:
+
+   ```sh
+   gh variable set IOS_APPSTORE_ENABLED --body false
+   gh workflow disable app-store-release.yml
+   ```
 
 ## Runner, signing and credentials
 
@@ -655,10 +695,16 @@ To diagnose signing, dispatch **Delivery maintenance** with `verify-signing`. It
 the profile and the P12 in a temporary keychain, prints only fingerprints and status codes,
 and never builds, uploads or calls GitHub or Apple.
 
-`mobile-delivery bootstrap --asc-config <file> --p12 <file> --p12-password-file <file>
---profile <file>`, run from the app's checkout, sets the
-environment secrets from local files. It runs only when invoked deliberately. Build the
-command with `./gradlew installDist`; it is `build/install/mobile-delivery/bin/mobile-delivery`.
+Build the CLI with `./gradlew installDist`. Run bootstrap from the app checkout using
+the absolute path to that launcher and your local credential files:
+
+```sh
+/path/to/mobile-delivery/build/install/mobile-delivery/bin/mobile-delivery bootstrap \
+  --asc-config asc.json --p12 distribution.p12 \
+  --p12-password-file p12-password.txt --profile App.mobileprovision
+```
+
+Bootstrap sets environment secrets only when invoked deliberately.
 Keep app build values as individual secrets and bind their declared names
 on the TestFlight step; no composite secret is required.
 

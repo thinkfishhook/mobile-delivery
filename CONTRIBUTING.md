@@ -45,18 +45,32 @@ are distributed under the [MIT license](LICENSE).
 
 ## Release a version
 
-Add a dated version section to `CHANGELOG.md`, integrate it on `trunk`, and wait for
-Check and the hosted engine/composite tests to pass. A version tag must point to that
-tested commit. For example, a prerelease rehearsal uses:
+Prepare a version section in `CHANGELOG.md`, integrate it on `trunk`, and wait for
+Check and the hosted engine/composite tests to pass on the exact candidate SHA. Set the
+date in the stable version section during cutover, then validate the resulting commit
+before tagging it. Never replace a published version tag or release asset.
+
+A local candidate rehearsal can read the pending stable section (for example `[1.0.0]`)
+without setting its date early. Run from a clean checkout, using an unused throwaway tag;
+this packages locally and does not publish:
 
 ```sh
-git tag -a v1.0.0-rc.1 -m 'Prepare v1.0.0-rc.1'
-git push origin v1.0.0-rc.1
+./gradlew check installDist
+bash internal/actionlint.sh
+python3 -B internal/test_release.py
+git tag v1.0.0-rc
+GITHUB_REF_NAME=v1.0.0-rc GITHUB_REF=refs/tags/v1.0.0-rc GITHUB_SHA="$(git rev-parse HEAD)" python3 -B internal/release.py package
+git tag -d v1.0.0-rc
 ```
+
+Inspect `build/release/plan.json`, `notes.md`, the CLI zip and its `.zip.sha256` file.
+An explicitly dated candidate section takes precedence over the pending stable section.
+Stable tags always require their own dated section. Push a version tag only as part of
+an approved release cutover, after the final commit's hosted checks pass.
 
 The Release workflow reruns checks, builds `installDist`, and attaches a reproducible
 `mobile-delivery-<tag>.zip` plus its SHA-256 checksum to a GitHub Release. Notes come from
-that version's changelog section. Prereleases stay marked as prereleases and never move
+the selected changelog section. Prereleases stay marked as prereleases and never move
 a major tag. A stable release advances its matching major tag (`v1` for `v1.2.3`) only
 after publication succeeds, without moving backwards or across unrelated history.
 Let the workflow own major tags; never replace a published version tag or release asset.
@@ -65,9 +79,8 @@ For local bootstrap, verify the downloaded zip against its `.sha256` file, unzip
 install JDK 21, and run `mobile-delivery/bin/mobile-delivery bootstrap` with the documented
 arguments from the app checkout. Gradle is not needed for the downloaded CLI.
 
-Do not cut v1.0.0 until the publication, sample onboarding and app adoption acceptance
-checks are complete. Publishing a tool release does not enable App Store automation
-in apps that use it.
+The v1.0.0 cutover follows the approved drain, repository move and app pinning plan.
+Publishing a tool release does not enable App Store automation in apps that use it.
 
 ## Moving a pinned repository
 

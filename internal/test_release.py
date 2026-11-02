@@ -53,6 +53,16 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             release.notes(text, "v1.0.0")
 
+    def test_candidate_uses_pending_stable_notes_but_stable_still_requires_date(self):
+        text = "## [1.0.0]\n\n### Added\n- Candidate features.\n\n## [0.9.0-rc.1] - 2026-10-23\n\nOlder.\n"
+        self.assertEqual("### Added\n- Candidate features.", release.notes(text, "v1.0.0-rc"))
+        with self.assertRaises(ValueError):
+            release.notes(text, "v1.0.0")
+        with self.assertRaises(ValueError):
+            release.notes(text, "v1.0.1-rc")
+        explicit = "## [1.0.0-rc] - 2026-11-02\n\nCandidate only.\n\n" + text
+        self.assertEqual("Candidate only.", release.notes(explicit, "v1.0.0-rc"))
+
     def test_prereleases_never_read_or_move_a_major_tag(self):
         github = FakeGitHub()
         release.publish({"tag": "v0.9.0-rc.1", "sha": "a" * 40}, github)
