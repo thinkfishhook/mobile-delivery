@@ -242,7 +242,7 @@ class AppStoreReleaseTest {
             store.release().sweep().single {
                 it.operatorAction?.contains("Submit or cancel it in App Store Connect") == true
             }
-        assertTrue(finding.operationKey.startsWith("appstore/"))
+        assertIs<IncidentSubject.ReviewSubmission>(finding.operationKey)
     }
 
     @Test
@@ -456,7 +456,7 @@ class AppStoreReleaseTest {
         val findings = store.release().sweep()
         assertEquals(
             SweepFinding(
-                "appstore/26.09.01",
+                IncidentSubject.AppStoreVersion("26.09.01"),
                 "phased rollout paused, day 4 (10%), pause days used 2/30",
             ),
             findings.single(),
@@ -702,13 +702,21 @@ class AppStoreReleaseTest {
             // The message quotes what was typed, never claiming the field is missing.
             assertContains(skipped.action!!, "\"$body\"")
             assertContains(
-                store.release().sweep().single { it.operationKey == "hold/7" }.operatorAction!!,
+                store
+                    .release()
+                    .sweep()
+                    .single { it.operationKey == IncidentSubject.Hold(7) }
+                    .operatorAction!!,
                 "\"$body\"",
             )
             assertFails { store.release(at = tuesday).promote(manual) }
             assertEquals(
                 "unresolvable hold",
-                store.release().sweep().single { it.operationKey == "hold/7" }.outcome,
+                store
+                    .release()
+                    .sweep()
+                    .single { it.operationKey == IncidentSubject.Hold(7) }
+                    .outcome,
             )
             assertTrue(store.apple.calls.isEmpty())
         }

@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SweepFinding(
-    val operationKey: String,
+    val operationKey: IncidentSubject,
     val outcome: String,
     val operatorAction: String? = null,
     val repairError: String? = null,
@@ -44,9 +44,17 @@ class Sweep(
             try {
                 appStore.sweep()
             } catch (error: Exception) {
-                listOf(SweepFinding("appstore", "unread", repairError = error.displayMessage()))
+                listOf(
+                    SweepFinding(
+                        IncidentSubject.AppStore,
+                        "unread",
+                        repairError = error.displayMessage(),
+                    )
+                )
             }
-        val appStoreRead = findings.none { it.operationKey == "appstore" && it.repairError != null }
+        val appStoreRead = findings.none {
+            it.operationKey == IncidentSubject.AppStore && it.repairError != null
+        }
         val receipts = facts.receipts + repaired
         try {
             incidents.sync(findings, tip) { key ->
@@ -54,7 +62,11 @@ class Sweep(
             }
         } catch (error: Exception) {
             findings +=
-                SweepFinding("incidents", "sync failed", repairError = error.displayMessage())
+                SweepFinding(
+                    IncidentSubject.Incidents,
+                    "sync failed",
+                    repairError = error.displayMessage(),
+                )
         }
         return SweepReport(findings)
     }
@@ -62,31 +74,35 @@ class Sweep(
     // Whether this sweep looked closely enough at an incident's subject to close it. Absence from
     // the findings means nothing for what the sweep did not read.
     private fun checked(
-        key: String,
+        key: IncidentSubject,
         audit: Boolean,
         appStoreRead: Boolean,
         builds: List<TestFlightBuild>,
         receipts: Set<String>,
     ) =
-        when {
-            key == "audit" -> audit
+        when (key) {
+            IncidentSubject.Audit -> audit
             // Settled once the receipt exists or Apple no longer has a build that needs one.
-            key.startsWith("receipt/") -> {
-                val (version, number) = key.removePrefix("receipt/").split('/')
-                "deploy/testflight/$version/$number" in receipts ||
+            is IncidentSubject.Receipt -> {
+                "deploy/testflight/${key.version}/${key.number}" in receipts ||
                     builds.none {
-                        it.version == version &&
-                            it.number == number &&
+                        it.version == key.version &&
+                            it.number == key.number &&
                             it.processingState == "VALID" &&
                             !it.expired
                     }
             }
-            key.startsWith("appstore/") || key.startsWith("hold/") -> appStoreRead
-            else -> true
+            is IncidentSubject.AppStoreVersion,
+            is IncidentSubject.ReviewSubmission,
+            is IncidentSubject.Hold -> appStoreRead
+            is IncidentSubject.BetaCommit,
+            IncidentSubject.AppStore,
+            IncidentSubject.Incidents,
+            is IncidentSubject.Unknown -> true
         }
 
     private fun tipStatus(tip: String, facts: BetaFacts): SweepFinding {
-        val key = "internal/$tip"
+        val key = IncidentSubject.BetaCommit(tip)
         val traces = beta.traces(tip, facts)
         if (traces.latest?.receiptTarget == tip) return SweepFinding(key, "delivered")
         val latest = traces.latest
@@ -146,10 +162,13 @@ class Sweep(
                 }
                 tags.write(tag, sha, Receipt(sha, version, number, build.id))
                 repaired += tag
-                SweepFinding("internal/$sha", "receipt repaired for $version/$number")
+                SweepFinding(
+                    IncidentSubject.BetaCommit(sha),
+                    "receipt repaired for $version/$number",
+                )
             } catch (error: Exception) {
                 SweepFinding(
-                    "receipt/$version/$number",
+                    IncidentSubject.Receipt(version.toString(), number.toString()),
                     "receipt repair failed",
                     repairError = error.displayMessage(),
                 )
@@ -166,7 +185,7 @@ class Sweep(
             null
         } catch (error: Exception) {
             SweepFinding(
-                "audit",
+                IncidentSubject.Audit,
                 "receipt collision",
                 repairError = "$tag: ${error.displayMessage()}",
             )
@@ -176,7 +195,7 @@ class Sweep(
     fun summary(result: SweepReport, executionFailed: Boolean = false) =
         RunSummary(
             if (executionFailed) "failed" else "completed",
-            result.findings.joinToString("; ") { "${it.operationKey}: ${it.outcome}" },
+            result.findings.joinToString("; ") { "${it.operationKey.key}: ${it.outcome}" },
             result.findings.mapNotNull { it.operatorAction },
             result.findings.mapNotNull { it.repairError },
         )

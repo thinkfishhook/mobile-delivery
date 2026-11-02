@@ -4,20 +4,11 @@ import kotlinx.serialization.json.*
 
 const val INCIDENT_LABEL = "ios-delivery"
 
-fun incidentTitle(operationKey: String) =
-    when {
-        operationKey.startsWith("internal/") ->
-            "Beta delivery needs attention: ${operationKey.removePrefix("internal/").take(12)}"
-        operationKey.startsWith("appstore/") ->
-            "App Store release needs attention: ${operationKey.removePrefix("appstore/")}"
-        else -> "iOS delivery needs attention: $operationKey"
-    }
-
 interface Incidents {
     // Opens or updates an incident for every finding that needs a person. Closes the other open
     // incidents, but only those whose key this sweep `checked`. Closed incidents are never read
     // or reopened: a problem that comes back gets a new issue.
-    fun sync(findings: List<SweepFinding>, tip: String, checked: (String) -> Boolean)
+    fun sync(findings: List<SweepFinding>, tip: String, checked: (IncidentSubject) -> Boolean)
 }
 
 // Incidents are labelled issues found by an owner marker; nothing about them is stored.
@@ -30,9 +21,9 @@ class GitHubIncidents(
     private val start = "<!-- $owner-status:start -->"
     private val end = "<!-- $owner-status:end -->"
 
-    private fun marker(key: String) = "<!-- $owner:$key -->"
+    private fun marker(subject: IncidentSubject) = "<!-- $owner:${subject.key} -->"
 
-    private fun owned(): Map<String, JsonObject> {
+    private fun owned(): Map<IncidentSubject, JsonObject> {
         val rows =
             github.pages("issues?labels=$INCIDENT_LABEL&state=open").filter {
                 "pull_request" !in it
@@ -42,12 +33,12 @@ class GitHubIncidents(
                 .find(issue["body"]?.jsonPrimitive?.contentOrNull.orEmpty())
                 ?.groupValues
                 ?.get(1)
-                ?.let { it to issue }
+                ?.let { IncidentSubject.fromKey(it) to issue }
         }
         keyed
             .groupBy { it.first }
             .forEach { (key, issues) ->
-                require(issues.size == 1) { "Duplicate owned incident for $key" }
+                require(issues.size == 1) { "Duplicate owned incident for ${key.key}" }
             }
         return keyed.toMap()
     }
@@ -64,7 +55,11 @@ class GitHubIncidents(
         return original.substringBefore(start) + block + original.substringAfter(end)
     }
 
-    override fun sync(findings: List<SweepFinding>, tip: String, checked: (String) -> Boolean) {
+    override fun sync(
+        findings: List<SweepFinding>,
+        tip: String,
+        checked: (IncidentSubject) -> Boolean,
+    ) {
         val problems =
             findings
                 .filter { it.operatorAction != null || it.repairError != null }
@@ -90,7 +85,18 @@ class GitHubIncidents(
         }
         (open - problems.keys).forEach { (key, issue) ->
             if (!checked(key)) return@forEach
-            val superseded = key.startsWith("internal/") && key != "internal/$tip"
+            val superseded =
+                when (key) {
+                    is IncidentSubject.BetaCommit -> key.sha != tip
+                    is IncidentSubject.AppStoreVersion,
+                    is IncidentSubject.ReviewSubmission,
+                    is IncidentSubject.Hold,
+                    is IncidentSubject.Receipt,
+                    IncidentSubject.Audit,
+                    IncidentSubject.AppStore,
+                    IncidentSubject.Incidents,
+                    is IncidentSubject.Unknown -> false
+                }
             val resolution =
                 if (superseded) "Superseded by $branch $tip; this commit was not delivered."
                 else "Resolved; the last sweep found nothing to do."
@@ -113,12 +119,12 @@ class GitHubIncidents(
     }
 
     // A lost create response is read back from the open issues, never written twice.
-    private fun create(key: String, body: String) {
+    private fun create(key: IncidentSubject, body: String) {
         val write = attemptEffect {
             github.api(
                 "issues",
                 buildJsonObject {
-                    put("title", incidentTitle(key))
+                    put("title", key.title)
                     put("body", body)
                     putJsonArray("labels") { add(INCIDENT_LABEL) }
                 },

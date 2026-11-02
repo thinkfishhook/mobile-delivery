@@ -104,7 +104,8 @@ class IncidentsTest {
         fun writes() = commands.calls.count { it.input != null }
     }
 
-    private fun problem(key: String, action: String) = SweepFinding(key, "needs action", action)
+    private fun problem(key: String, action: String) =
+        SweepFinding(IncidentSubject.fromKey(key), "needs action", action)
 
     @Test
     fun `incidents open once update in place and resolve with human notes kept`() {
@@ -123,7 +124,12 @@ class IncidentsTest {
             )
         remote.incidents.sync(listOf(problem("internal/sha", "Receipt missing")), "sha") { true }
         assertContains(remote.issues[0].string("body"), "Receipt missing")
-        remote.incidents.sync(listOf(SweepFinding("internal/sha", "delivered")), "sha") { true }
+        remote.incidents.sync(
+            listOf(SweepFinding(IncidentSubject.BetaCommit("sha"), "delivered")),
+            "sha",
+        ) {
+            true
+        }
         assertEquals("closed", remote.issues[0].string("state"))
         assertEquals("completed", remote.issues[0].string("state_reason"))
         assertTrue(remote.issues[0].string("body").startsWith("Human note"))
@@ -134,7 +140,12 @@ class IncidentsTest {
     fun `a problem that comes back gets a new incident and closed ones are never read`() {
         val remote = Issues()
         remote.incidents.sync(listOf(problem("internal/sha", "Tests failed")), "sha") { true }
-        remote.incidents.sync(listOf(SweepFinding("internal/sha", "delivered")), "sha") { true }
+        remote.incidents.sync(
+            listOf(SweepFinding(IncidentSubject.BetaCommit("sha"), "delivered")),
+            "sha",
+        ) {
+            true
+        }
         remote.incidents.sync(listOf(problem("internal/sha", "Receipt deleted")), "sha") { true }
         assertEquals(listOf("closed", "open"), remote.issues.map { it.string("state") })
         assertContains(remote.issues[0].string("body"), "Resolved")

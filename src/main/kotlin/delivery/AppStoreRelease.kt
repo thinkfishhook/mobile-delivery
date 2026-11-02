@@ -352,7 +352,7 @@ class AppStoreRelease(
         facts.versions
             .filter { it.state !in StoreStates.editable && it.buildNumber != null }
             .forEach { version ->
-                val key = "appstore/${version.version}"
+                val key = IncidentSubject.AppStoreVersion(version.version)
                 val testflight = "deploy/testflight/${version.version}/${version.buildNumber}"
                 val wanted =
                     listOfNotNull(
@@ -404,7 +404,7 @@ class AppStoreRelease(
             .forEach {
                 findings +=
                     SweepFinding(
-                        "appstore/review-submission-${it.id}",
+                        IncidentSubject.ReviewSubmission(it.id),
                         "review submission ${it.state}",
                         stranded(it, facts),
                     )
@@ -412,7 +412,7 @@ class AppStoreRelease(
         facts.failedSubmissions.forEach {
             findings +=
                 SweepFinding(
-                    "appstore/${it.version}",
+                    IncidentSubject.AppStoreVersion(it.version),
                     "submission ${it.state}",
                     "The submission of ${it.version} is ${it.state}. ${retry(facts)}",
                 )
@@ -422,7 +422,7 @@ class AppStoreRelease(
             val rollout = last.rollout
             findings +=
                 SweepFinding(
-                    "appstore/${last.version}",
+                    IncidentSubject.AppStoreVersion(last.version),
                     if (rollout == null || rollout.state == "COMPLETE") "released to all users"
                     else
                         "phased rollout ${rollout.state.lowercase()}, day ${rollout.day} (${rollout.percent}%), pause days used ${rollout.pausedDays}/30",
@@ -438,11 +438,11 @@ class AppStoreRelease(
                 .map { hold ->
                     if (hold.malformed)
                         SweepFinding(
-                            "hold/${hold.issue}",
+                            IncidentSubject.Hold(hold.issue),
                             "unresolvable hold",
                             "Hold #${hold.issue} names no TestFlight build with a receipt (${hold.unresolved}); every App Store release waits until it is fixed or closed.",
                         )
-                    else SweepFinding("hold/${hold.issue}", "holding ${hold.build}")
+                    else SweepFinding(IncidentSubject.Hold(hold.issue), "holding ${hold.build}")
                 }
                 .toMutableList()
         // Held code already on its way to people: say what to do, never change Apple.
@@ -455,7 +455,7 @@ class AppStoreRelease(
             val hold = heldBy(facts, tags.commit(tag)) ?: return@forEach
             findings +=
                 SweepFinding(
-                    "appstore/${version.version}",
+                    IncidentSubject.AppStoreVersion(version.version),
                     "held",
                     if (version in facts.unresolved)
                         "Hold #${hold.issue} covers ${version.version}, which is ${version.state}. Remove it from review in App Store Connect."

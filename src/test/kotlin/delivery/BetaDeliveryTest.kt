@@ -165,7 +165,10 @@ class BetaDeliveryTest {
         assertIs<StartDecision.Refused>(
             world.beta().start(Operation.Retry(sha, "234.2", "Recover"))
         )
-        val status = world.sweep().run(sha).findings.first { it.operationKey == "internal/$sha" }
+        val status =
+            world.sweep().run(sha).findings.first {
+                it.operationKey == IncidentSubject.BetaCommit(sha)
+            }
         assertContains(status.outcome, "uncertain")
         world.apple.builds += TestFlightBuild("build-234.2", "26.09.01", "234.2", "VALID", false)
         world.retry(sha)

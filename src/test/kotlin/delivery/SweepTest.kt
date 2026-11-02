@@ -9,19 +9,20 @@ class SweepTest {
     fun `finding serialization and summary keep the exact operation key strings`() =
         temp { output ->
             val world = World(output)
-            for (key in
+            for ((subject, key) in
                 listOf(
-                    "internal/sha",
-                    "appstore/26.09.01",
-                    "appstore/review-submission-id",
-                    "hold/7",
-                    "receipt/26.09.01/234.1",
-                    "audit",
-                    "appstore",
-                    "incidents",
-                    "legacy/unknown",
+                    IncidentSubject.BetaCommit("sha") to "internal/sha",
+                    IncidentSubject.AppStoreVersion("26.09.01") to "appstore/26.09.01",
+                    IncidentSubject.ReviewSubmission("id") to "appstore/review-submission-id",
+                    IncidentSubject.Hold(7) to "hold/7",
+                    IncidentSubject.Receipt("26.09.01", "234.1") to "receipt/26.09.01/234.1",
+                    IncidentSubject.Audit to "audit",
+                    IncidentSubject.AppStore to "appstore",
+                    IncidentSubject.Incidents to "incidents",
+                    IncidentSubject.Unknown("legacy/unknown") to "legacy/unknown",
                 )) {
-                val finding = SweepFinding(key, "waiting")
+                val finding = SweepFinding(subject, "waiting")
+                assertEquals(subject, IncidentSubject.fromKey(key))
                 val encoded =
                     """
                 {
@@ -55,15 +56,15 @@ class SweepTest {
                         world.apple.builds.replaceAll { it.copy(processingState = "PROCESSING") }
                     "absent" -> world.apple.builds.clear()
                 }
-                var checked: ((String) -> Boolean)? = null
+                var capturedCheck: ((IncidentSubject) -> Boolean)? = null
                 val incidents =
                     object : Incidents {
                         override fun sync(
                             findings: List<SweepFinding>,
                             tip: String,
-                            checkedSubject: (String) -> Boolean,
+                            checked: (IncidentSubject) -> Boolean,
                         ) {
-                            checked = checkedSubject
+                            capturedCheck = checked
                         }
                     }
                 val store =
@@ -92,23 +93,23 @@ class SweepTest {
                         { false },
                     )
                     .run(sha, audit)
-                val check = assertNotNull(checked)
-                assertEquals(audit, check("audit"))
+                val check = assertNotNull(capturedCheck)
+                assertEquals(audit, check(IncidentSubject.fromKey("audit")))
                 for (key in
                     listOf(
                         "appstore/26.09.01",
                         "appstore/review-submission-id",
                         "hold/7",
-                    )) assertEquals(readable, check(key), key)
+                    )) assertEquals(readable, check(IncidentSubject.fromKey(key)), key)
                 assertEquals(
                     receiptState != "missing",
-                    check("receipt/26.09.01/234.1"),
+                    check(IncidentSubject.fromKey("receipt/26.09.01/234.1")),
                     receiptState,
                 )
-                assertTrue(check("receipt/26.09.01/999.1"))
+                assertTrue(check(IncidentSubject.fromKey("receipt/26.09.01/999.1")))
                 for (key in
                     listOf("internal/sha", "appstore", "incidents", "legacy/unknown")) assertTrue(
-                    check(key),
+                    check(IncidentSubject.fromKey(key)),
                     key,
                 )
             }
@@ -123,7 +124,10 @@ class SweepTest {
         world.deliver(sha)
         val effects = world.apple.calls.toList()
         val report = world.sweep().run(sha)
-        assertEquals(SweepFinding("internal/$sha", "delivered"), report.findings.first())
+        assertEquals(
+            SweepFinding(IncidentSubject.BetaCommit(sha), "delivered"),
+            report.findings.first(),
+        )
         assertFalse(report.needsAction)
         assertEquals(effects, world.apple.calls)
     }
@@ -304,7 +308,7 @@ class SweepTest {
         val report = sweep.run(sha)
         assertTrue(report.broken)
         assertEquals(
-            "receipt/26.09.01/234.1",
+            IncidentSubject.Receipt("26.09.01", "234.1"),
             report.findings.first { it.repairError != null }.operationKey,
         )
     }

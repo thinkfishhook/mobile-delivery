@@ -453,7 +453,11 @@ class FakeIncidents : Incidents {
     val synced = mutableListOf<List<SweepFinding>>()
     var failure = false
 
-    override fun sync(findings: List<SweepFinding>, tip: String, checked: (String) -> Boolean) {
+    override fun sync(
+        findings: List<SweepFinding>,
+        tip: String,
+        checked: (IncidentSubject) -> Boolean,
+    ) {
         if (failure) throw CommandError("issue unavailable")
         synced += findings
     }
