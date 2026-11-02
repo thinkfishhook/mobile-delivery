@@ -1,0 +1,5 @@
+<testsuite tests="1" failures="0" errors="1" skipped="0">
+  <testcase classname="sample.LoadTest" name="load"><error>Unable to load fixture
+    at sample.Other.load(Other.kt:7)
+  </error></testcase>
+</testsuite>

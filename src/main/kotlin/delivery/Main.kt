@@ -65,7 +65,23 @@ internal fun runTask(
                 println("Signing identity verified; no archive or upload performed.")
             }
         "verify" ->
-            Verification(config, commands, env).verify(root, root.resolve("build/ci-verification"))
+            try {
+                Verification(config, commands, env)
+                    .verify(root, root.resolve("build/ci-verification"))
+            } catch (error: VerificationFailure) {
+                writeRunSummary(
+                    root,
+                    env,
+                    RunSummary(
+                        "failed",
+                        "See the run evidence",
+                        listOfNotNull(error.message),
+                        emptyList(),
+                        testFailures = error.testFailures,
+                    ),
+                )
+                throw error
+            }
         "bootstrap" -> bootstrap(args.drop(1), config, commands, env)
         else -> DeliveryTool(root, config, commands, env).run(mode)
     }

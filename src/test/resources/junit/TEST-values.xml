@@ -1,0 +1,10 @@
+<testsuite tests="3" failures="1" errors="0" skipped="1">
+  <testcase classname="sample.ValueTest" name="value"><failure message="expected 1 but was 2">java.lang.AssertionError: ignored body message
+    at helper.Assert.equal(Assert.kt:8)
+    at sample.ValueTestHelper.check(Helper.kt:9)
+    at sample.ValueTest.value(ValueTest.kt:42)
+    at sample.ValueTest.run(ValueTest.kt:50)
+  </failure></testcase>
+  <testcase classname="sample.ValueTest" name="later"><skipped message="not available"/></testcase>
+  <testcase classname="sample.ValueTest" name="passes"/>
+</testsuite>

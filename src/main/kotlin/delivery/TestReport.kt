@@ -10,6 +10,8 @@ data class TestTotals(val tests: Int, val failures: Int, val errors: Int, val sk
 sealed class TestReport(val path: Path) {
     abstract fun totals(commands: Commands, env: Map<String, String>): TestTotals
 
+    abstract fun failures(commands: Commands, env: Map<String, String>): List<TestFailure>
+
     companion object {
         fun resolve(source: Path, report: String): TestReport {
             val path = source.resolve(report)
@@ -21,9 +23,46 @@ sealed class TestReport(val path: Path) {
 class JUnitReport(private val directory: Path) : TestReport(directory) {
     override fun totals(commands: Commands, env: Map<String, String>): TestTotals = totals()
 
+    override fun failures(commands: Commands, env: Map<String, String>): List<TestFailure> =
+        failures()
+
+    fun failures(): List<TestFailure> =
+        reports().flatMap { report ->
+            val cases =
+                xmlFactory()
+                    .newDocumentBuilder()
+                    .parse(report.toFile())
+                    .getElementsByTagName("testcase")
+            (0 until cases.length).mapNotNull { index ->
+                val test = cases.item(index) as org.w3c.dom.Element
+                val problem =
+                    (0 until test.childNodes.length)
+                        .map { test.childNodes.item(it) }
+                        .filterIsInstance<org.w3c.dom.Element>()
+                        .firstOrNull { it.tagName == "failure" || it.tagName == "error" }
+                        ?: return@mapNotNull null
+                val className = test.getAttribute("classname")
+                val body = problem.textContent.trim()
+                val frame =
+                    Regex(
+                            """(?m)^\s*at ${Regex.escape(className)}(?:\$[^.]+)?\.[^(]+\(([^():]+):(\d+)\)"""
+                        )
+                        .find(body)
+                TestFailure(
+                    "$className.${test.getAttribute("name")}",
+                    problem.getAttribute("message").ifBlank { body.lineSequence().first() },
+                    frame?.groupValues?.get(1),
+                    frame?.groupValues?.get(2)?.toIntOrNull(),
+                )
+            }
+        }
+
+    private fun reports(): List<Path> =
+        if (directory.exists()) directory.listDirectoryEntries("TEST-*.xml").sorted()
+        else emptyList()
+
     fun totals(): TestTotals {
-        val reports =
-            if (directory.exists()) directory.listDirectoryEntries("TEST-*.xml") else emptyList()
+        val reports = reports()
         require(reports.isNotEmpty()) { "Missing test reports: $directory" }
         val attributes = listOf("tests", "failures", "errors", "skipped")
         val counts = IntArray(4)
@@ -63,7 +102,7 @@ class XcresultReport(private val bundle: Path) : TestReport(bundle) {
         return totals(summary)
     }
 
-    fun failures(commands: Commands, env: Map<String, String>): List<TestFailure> =
+    override fun failures(commands: Commands, env: Map<String, String>): List<TestFailure> =
         failures(
             commands.run(
                 listOf(
@@ -146,6 +185,7 @@ private fun gate(report: Path, totals: TestTotals): TestTotals {
     return totals
 }
 
+@Serializable
 data class TestFailure(
     val test: String,
     val message: String,

@@ -31,6 +31,7 @@ class DeliveryTool(
                         "No delivery outcome inferred",
                         listOfNotNull(error.message),
                         emptyList(),
+                        testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
                     )
                 )
             throw error
@@ -209,6 +210,7 @@ class DeliveryTool(
                     "See the run evidence",
                     listOfNotNull(error.message),
                     emptyList(),
+                    testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
                 )
             )
             throw error
@@ -308,15 +310,7 @@ class DeliveryTool(
 
     private fun writeSummary(summary: RunSummary) {
         summaryWritten = true
-        val encoded =
-            json.encodeToString(summary.copy(ignoredVersions = apple.ignoredVersions.sorted()))
-        root
-            .resolve("build/delivery")
-            .createDirectories()
-            .resolve("run-summary.json")
-            .writeText(encoded + "\n")
-        env["GITHUB_STEP_SUMMARY"]?.let { Path.of(it).appendText("\n```json\n$encoded\n```\n") }
-        println(encoded)
+        writeRunSummary(root, env, summary.copy(ignoredVersions = apple.ignoredVersions.sorted()))
     }
 
     private fun report(sweep: Sweep, result: SweepReport, failed: Boolean) {
@@ -336,4 +330,16 @@ data class RunSummary(
     val actionNeeded: List<String>,
     val repairErrors: List<String>,
     val ignoredVersions: List<String> = emptyList(),
+    val testFailures: List<TestFailure> = emptyList(),
 )
+
+internal fun writeRunSummary(root: Path, env: Map<String, String>, summary: RunSummary) {
+    val encoded = json.encodeToString(summary)
+    root
+        .resolve("build/delivery")
+        .createDirectories()
+        .resolve("run-summary.json")
+        .writeText(encoded + "\n")
+    env["GITHUB_STEP_SUMMARY"]?.let { Path.of(it).appendText("\n```json\n$encoded\n```\n") }
+    println(encoded)
+}

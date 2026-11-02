@@ -46,21 +46,6 @@ class Verification(
                         log = log,
                     )
                 } catch (error: CommandError) {
-                    val failures =
-                        reports
-                            .map { it.second }
-                            .filterIsInstance<XcresultReport>()
-                            .filter { it.path.exists() }
-                            .flatMap { report ->
-                                attemptEffect { report.failures(commands, env) }
-                                    .getOrElse {
-                                        log.appendText(
-                                            "Could not read test failures from ${report.path}: ${it.message}\n"
-                                        )
-                                        emptyList()
-                                    }
-                            }
-                    annotateTestFailures(failures)
                     val text = log.readText()
                     val validation =
                         Regex(
@@ -71,8 +56,7 @@ class Verification(
                             .containsMatchIn(text)
                     throw VerificationFailure(
                         "application-checks",
-                        if (validation || failures.isNotEmpty()) FailureKind.VALIDATION
-                        else FailureKind.INFRASTRUCTURE,
+                        if (validation) FailureKind.VALIDATION else FailureKind.INFRASTRUCTURE,
                         error.message.orEmpty(),
                     )
                 }
@@ -83,7 +67,28 @@ class Verification(
             output.resolve("tests.json").writeText(json.encodeToString(totals) + "\n")
             println(json.encodeToString(totals))
         } catch (error: Exception) {
+            val failures =
+                reports
+                    .map { it.second }
+                    .filter { it.path.exists() }
+                    .flatMap { report ->
+                        attemptEffect { report.failures(commands, env) }
+                            .getOrElse {
+                                log.appendText(
+                                    "Could not read test failures from ${report.path}: ${it.message}\n"
+                                )
+                                emptyList()
+                            }
+                    }
+            annotateTestFailures(failures)
             log.appendText("Verification failed: ${error.message}\n")
+            if (error is VerificationFailure)
+                throw VerificationFailure(
+                    error.phase,
+                    if (failures.isNotEmpty()) FailureKind.VALIDATION else error.kind,
+                    error.message.orEmpty(),
+                    failures,
+                )
             throw error
         } finally {
             (reports.map { it.first } + config.verification.evidence).forEach {
@@ -104,8 +109,12 @@ enum class FailureKind {
     INFRASTRUCTURE,
 }
 
-class VerificationFailure(val phase: String, val kind: FailureKind, message: String) :
-    CommandError(message)
+class VerificationFailure(
+    val phase: String,
+    val kind: FailureKind,
+    message: String,
+    val testFailures: List<TestFailure> = emptyList(),
+) : CommandError(message)
 
 interface BuildOperations {
     fun checkEnvironment()

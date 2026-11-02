@@ -38,7 +38,7 @@ internal fun annotateTestFailures(failures: List<TestFailure>) {
         annotate(
             Annotation(
                 "error",
-                "${failures.size - visible} more failing tests; see the xcresult evidence for details.",
+                "${failures.size - visible} more failing tests; see the test report evidence for details.",
             )
         )
 }
