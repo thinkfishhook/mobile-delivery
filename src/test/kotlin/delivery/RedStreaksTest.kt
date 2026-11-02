@@ -6,6 +6,99 @@ import kotlinx.serialization.json.*
 import org.junit.Test
 
 class RedStreaksTest {
+    private val first = RedStreakCommit("a".repeat(40), "First red", "https://example/run/1")
+    private val old = TestFailure("Old.fails", "expected true", "Tests.kt", 12)
+    private val kept = TestFailure("Kept.fails", "expected saved", "Tests.kt", 20)
+    private val added = TestFailure("New.fails", "expected open", "Other.kt", 30)
+
+    @Test
+    fun `failure diff is stable when messages and lines change`() {
+        val changed = old.copy(message = "different failure", line = 99)
+        val before = listOf(old, kept)
+        val after = listOf(changed, added)
+        assertEquals(
+            listOf(
+                FailureChange(changed, "still failing"),
+                FailureChange(added, "new"),
+                FailureChange(kept, "now passing"),
+            ),
+            diffFailures(before, after),
+        )
+        assertEquals(listOf(old, kept), before)
+        assertEquals(listOf(changed, added), after)
+    }
+
+    @Test
+    fun `range stays anchored and identical replay preserves the previous diff`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        val a = DeliveryToolHarness.sha('a')
+        h.red(a, "First", "Old.fails")
+        val before =
+            h.streak().string("body").substringAfter("## Suspect commits").substringBefore("<!--")
+        val streaks =
+            RedStreaks(GitHub("owner/repo", h.commands, emptyMap()), config.incidentMarker)
+        val commit =
+            RedStreakCommit(DeliveryToolHarness.sha('b'), "Second", "https://example/run/11")
+        val failures = listOf(TestFailure("New.fails", "expected true"))
+        streaks.sync(commit, failures) { error("Must retain the original range") }
+        val body = h.streak().string("body")
+        assertEquals(before, body.substringAfter("## Suspect commits").substringBefore("<!--"))
+        assertContains(body, "**now passing** Old.fails")
+        streaks.sync(commit, failures) { error("Replay must retain the original range") }
+        assertEquals(body, h.streak().string("body"))
+    }
+
+    @Test
+    fun `first renderer update marks every failure new with evidence`() {
+        val body = renderRedStreak(listOf(first), listOf(old, kept))
+        assertContains(body, "## Failing tests")
+        assertContains(body, "**new** Old.fails — expected true — Tests.kt:12")
+        assertContains(body, "**new** Kept.fails — expected saved — Tests.kt:20")
+    }
+
+    @Test
+    fun `second renderer update shows fixed retained and new failures`() {
+        val body = renderRedStreak(listOf(first), listOf(kept, added), listOf(old, kept))
+        assertContains(body, "**now passing** Old.fails — expected true — Tests.kt:12")
+        assertContains(body, "**still failing** Kept.fails — expected saved — Tests.kt:20")
+        assertContains(body, "**new** New.fails — expected open — Other.kt:30")
+    }
+
+    @Test
+    fun `renderer includes first parent suspects and two untested superseded commits`() {
+        val range =
+            SuspectRange(
+                "d".repeat(40),
+                first.sha,
+                listOf(
+                    SuspectCommit("b".repeat(40), "Skipped one", true),
+                    SuspectCommit("c".repeat(40), "Skipped two", true),
+                    SuspectCommit(first.sha, first.subject),
+                ),
+            )
+        val body =
+            renderRedStreak(listOf(first), listOf(old), suspects = range, repo = "owner/repo")
+        assertContains(body, "## Suspect commits")
+        assertContains(body, "${range.base}..${first.sha}")
+        assertContains(body, "https://github.com/owner/repo/compare/${range.base}...${first.sha}")
+        assertContains(body, "bbbbbbbbbbbb Skipped one — untested")
+        assertContains(body, "cccccccccccc Skipped two — untested")
+        assertContains(body, "superseded and never verified")
+    }
+
+    @Test
+    fun `renderer uses baseline when no delivery exists`() {
+        val body =
+            renderRedStreak(
+                listOf(first),
+                listOf(old),
+                suspects = SuspectRange("baseline", first.sha, emptyList()),
+                repo = "owner/repo",
+            )
+        assertContains(body, "baseline..${first.sha}")
+        assertContains(body, "compare/baseline...${first.sha}")
+    }
+
     @Test
     fun `red push opens one actionable issue and identical replay is quiet`() = temp { root ->
         val h = DeliveryToolHarness(root)
@@ -112,7 +205,7 @@ class RedStreaksTest {
                     "actions/runs/11",
                     "CurrentTest.fails",
                 )) assertContains(body, value)
-            assertFalse("OldTest.fails" in body)
+            assertContains(body, "**now passing** OldTest.fails")
         }
 
     @Test
@@ -147,12 +240,12 @@ class RedStreaksTest {
         h.red(b, "Second", "SecondTest.fails", "11")
         h.red(b, "Second", "RerunTest.fails", "12")
         val body = h.streak().string("body")
-        assertEquals(1, body.lineSequence().count { b.take(12) in it && !it.startsWith("<!--") })
+        assertEquals(1, body.lineSequence().count { b.take(12) in it && "Run:" in it })
         assertContains(body, "actions/runs/10")
         assertContains(body, "actions/runs/12")
         assertFalse("actions/runs/11" in body)
         assertContains(body, "RerunTest.fails")
-        assertFalse("SecondTest.fails" in body)
+        assertContains(body, "**now passing** SecondTest.fails")
     }
 
     @Test

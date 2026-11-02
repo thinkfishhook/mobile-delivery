@@ -95,7 +95,10 @@ class DeliveryToolHarness(val root: Path) {
                 else ok("")
             args.take(2) == listOf("rev-list", "--count") -> ok(count(args[2]).toString())
             args.take(2) == listOf("rev-list", "--first-parent") ->
-                ok(counts.entries.sortedBy { it.value }.joinToString("\n") { it.key })
+                ok(
+                    if (".." in args.last()) args.last().substringAfter("..")
+                    else counts.entries.sortedBy { it.value }.joinToString("\n") { it.key }
+                )
             else -> error("Unexpected git: $args")
         }
 

@@ -226,11 +226,12 @@ class DeliveryTool(
                 summary.verificationFailureKind != FailureKind.VALIDATION
         )
             return
-        RedStreaks(github, config.incidentMarker)
-            .sync(
-                RedStreakCommit(sha, source.git("log", "-1", "--format=%s", sha), workflowUrl(env)),
-                summary.failures,
-            )
+        RedStreaks(github, config.incidentMarker).sync(
+            RedStreakCommit(sha, source.git("log", "-1", "--format=%s", sha), workflowUrl(env)),
+            summary.failures,
+        ) { firstRed ->
+            redStreakSuspects(firstRed, config.baseline, source, GitHubReceiptTags(github), github)
+        }
     }
 
     private fun startRun(event: WorkflowEvent, start: StartRun, beta: BetaDelivery) {

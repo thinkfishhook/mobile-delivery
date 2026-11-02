@@ -10,13 +10,83 @@ internal data class RedStreakCommit(val sha: String, val subject: String, val ru
 private fun redStreakText(text: String) =
     text.replace("\r", " ").replace("\n", " ").replace("<", "&lt;").replace(">", "&gt;")
 
-internal fun renderRedStreak(commits: List<RedStreakCommit>, failures: List<TestFailure>): String =
-    "Commits tested red:\n" +
+@Serializable
+internal data class SuspectCommit(
+    val sha: String,
+    val subject: String,
+    val untested: Boolean = false,
+)
+
+@Serializable
+internal data class SuspectRange(
+    val base: String,
+    val firstRed: String,
+    val commits: List<SuspectCommit>,
+    val fromBaseline: Boolean = false,
+)
+
+internal data class FailureChange(val failure: TestFailure, val status: String)
+
+// Messages and source line numbers can change while the same test remains broken.
+internal fun diffFailures(
+    previous: List<TestFailure>,
+    current: List<TestFailure>,
+): List<FailureChange> {
+    fun identity(failure: TestFailure) = Triple(failure.test, failure.file, failure.command)
+    val before = previous.map(::identity).toSet()
+    val after = current.map(::identity).toSet()
+    return current.distinctBy(::identity).map {
+        FailureChange(it, if (identity(it) in before) "still failing" else "new")
+    } +
+        previous
+            .distinctBy(::identity)
+            .filter { identity(it) !in after }
+            .map {
+                FailureChange(it, "now passing")
+            }
+}
+
+internal fun renderRedStreak(
+    commits: List<RedStreakCommit>,
+    failures: List<TestFailure>,
+    previous: List<TestFailure> = emptyList(),
+    suspects: SuspectRange? = null,
+    repo: String = "",
+): String = buildString {
+    append("Commits tested red:\n")
+    append(
         commits.joinToString("\n") {
             "- ${it.sha.take(12)} ${redStreakText(it.subject)} — Run: ${it.runUrl}"
-        } +
-        "\n\nCurrent failing tests:\n" +
-        failures.joinToString("\n") { "- ${redStreakText(it.test)}" }
+        }
+    )
+    append("\n\n## Failing tests\n")
+    append(
+        diffFailures(previous, failures).joinToString("\n") { (failure, status) ->
+            val location =
+                failure.file?.let { "$it:${failure.line ?: "?"}" } ?: "location unavailable"
+            "- **$status** ${redStreakText(failure.test)} — ${redStreakText(failure.message)} — ${redStreakText(location)}"
+        }
+    )
+    append("\n\n## Suspect commits\n")
+    if (suspects != null) {
+        append(
+            "Range: ${if (suspects.fromBaseline) "baseline " else ""}${suspects.base}..${suspects.firstRed}\n\n"
+        )
+        append(
+            "[Compare](https://github.com/$repo/compare/${suspects.base}...${suspects.firstRed})\n\n"
+        )
+        append(
+            suspects.commits.joinToString("\n") {
+                "- ${it.sha.take(12)} ${redStreakText(it.subject)}" +
+                    if (it.untested) " — untested" else ""
+            }
+        )
+        append("\n\nCommits marked untested were superseded and never verified.")
+    } else append("Range unavailable for this older update.")
+}
+
+@Serializable
+private data class RedStreakEvidence(val failures: List<TestFailure>, val suspects: SuspectRange?)
 
 class RedStreaks(private val github: GitHub, private val owner: String) {
     private val marker = "<!-- $owner:${IncidentSubject.RedStreak.key} -->"
@@ -35,7 +105,11 @@ class RedStreaks(private val github: GitHub, private val owner: String) {
         return issues.singleOrNull()
     }
 
-    internal fun sync(commit: RedStreakCommit, failures: List<TestFailure>) {
+    internal fun sync(
+        commit: RedStreakCommit,
+        failures: List<TestFailure>,
+        suspectRange: (String) -> SuspectRange = { SuspectRange("baseline", it, emptyList()) },
+    ) {
         val issue = open()
         val original = issue?.get("body")?.jsonPrimitive?.contentOrNull ?: "$marker\n"
         val content = status.content(original)
@@ -65,10 +139,25 @@ class RedStreaks(private val github: GitHub, private val owner: String) {
             it.sha == commit.sha || (it.sha.length == 12 && commit.sha.startsWith(it.sha))
         }
         if (index < 0) updatedCommits += commit else updatedCommits[index] = commit
+        val evidenceStart = "<!-- $owner-red-evidence: "
+        val evidence =
+            content
+                ?.takeIf { evidenceStart in it }
+                ?.let {
+                    json.decodeFromString<RedStreakEvidence>(
+                        it.substringAfter(evidenceStart).substringBefore(" -->")
+                    )
+                }
+        if (updatedCommits == commits && evidence?.failures == failures) return
+        val suspects = evidence?.suspects ?: suspectRange(updatedCommits.first().sha)
+        val evidenceState =
+            Json.encodeToString(RedStreakEvidence(failures, suspects))
+                .replace("<", "\\u003c")
+                .replace(">", "\\u003e")
         val state =
             Json.encodeToString(updatedCommits).replace("<", "\\u003c").replace(">", "\\u003e")
         val block =
-            "$start\nState: OPEN\n\n${renderRedStreak(updatedCommits, failures)}\n\n$stateStart$state -->\n$end"
+            "$start\nState: OPEN\n\n${renderRedStreak(updatedCommits, failures, evidence?.failures.orEmpty(), suspects, github.repo)}\n\n$stateStart$state -->\n$evidenceStart$evidenceState -->\n$end"
         val updated =
             if (legacy == null) status.replace(original, block)
             else
