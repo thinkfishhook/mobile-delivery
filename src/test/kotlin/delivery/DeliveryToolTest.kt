@@ -67,6 +67,14 @@ class DeliveryToolTest {
         val output = h.run("startRun", "push", sha = a).getOrThrow()
         assertTrue("operation=none" in output, output)
         assertTrue("superseded by $b" in output, output)
+        assertEquals(
+            RunSummary("completed", "internal/$a: superseded by $b", emptyList(), emptyList()),
+            json.decodeFromString<RunSummary>(
+                root.resolve("build/delivery/run-summary.json").readText()
+            ),
+        )
+        assertFalse("sha=$a" in output)
+        assertFalse("operation=deliver" in output)
         assertEquals(1, h.remoteCalls)
         assertEquals(
             listOf("gh", "api", "repos/owner/repo/git/ref/heads/trunk", "--include"),
@@ -97,7 +105,19 @@ class DeliveryToolTest {
     @Test
     fun `current push still starts a delivery`() = temp { root ->
         val h = DeliveryToolHarness(root)
-        assertContains(h.run("startRun", "push").getOrThrow(), "operation=deliver")
+        val output = h.run("startRun", "push").getOrThrow()
+        assertContains(output, "operation=deliver\nsha=$b\n")
+        assertFalse("superseded by" in output)
+        assertTrue(
+            h.commands.calls.any {
+                it.args == listOf("git", "merge-base", "--is-ancestor", config.baseline, b)
+            }
+        )
+        assertTrue(
+            h.commands.calls.any {
+                it.args == listOf("git", "merge-base", "--is-ancestor", b, "origin/trunk")
+            }
+        )
     }
 
     @Test
@@ -109,10 +129,50 @@ class DeliveryToolTest {
             h.run(
                     "startRun",
                     "workflow_dispatch",
+                    sha = b,
                     inputs = mapOf("operation" to "deliver", "sha" to a),
                 )
                 .getOrThrow()
-        assertTrue("operation=deliver" in output, output)
+        assertContains(output, "operation=deliver\nsha=$a\n")
+        assertFalse("superseded by" in output)
+    }
+
+    @Test
+    fun `startRun rejects commits outside the baseline or delivery branch before remote work`() =
+        temp { root ->
+            for (ancestry in listOf(config.baseline to a, a to "origin/trunk")) {
+                val h = DeliveryToolHarness(root)
+                h.nonAncestors += ancestry
+                val failure =
+                    h.run("startRun", "push", sha = a).exceptionOrNull()
+                        as DeliveryToolHarness.ToolFailure
+                assertContains(failure.output, "git failed (exit 1)")
+                assertFalse("operation=deliver" in failure.output)
+                assertEquals(0, h.remoteCalls)
+                val summary =
+                    json.decodeFromString<RunSummary>(
+                        root.resolve("build/delivery/run-summary.json").readText()
+                    )
+                assertEquals("failed", summary.runHealth)
+                assertEquals("No delivery outcome inferred", summary.deliveries)
+            }
+        }
+
+    @Test
+    fun `startRun requires a full SHA that resolves to the selected commit`() = temp { root ->
+        for (selected in listOf("abc123", a)) {
+            val h = DeliveryToolHarness(root)
+            h.resolvedCommits["$a^{commit}"] = b
+            val failure =
+                h.run("startRun", "workflow_dispatch", inputs = mapOf("sha" to selected))
+                    .exceptionOrNull() as DeliveryToolHarness.ToolFailure
+            assertContains(
+                failure.output,
+                if (selected == a) "must resolve to that exact commit"
+                else "Select an exact full commit SHA",
+            )
+            assertEquals(0, h.remoteCalls)
+        }
     }
 
     @Test

@@ -11,6 +11,8 @@ class DeliveryToolHarness(val root: Path) {
     var failBranchRead = false
     var failBranchFetch = false
     val counts = mutableMapOf<String, Int>()
+    val nonAncestors = mutableSetOf<Pair<String, String>>()
+    val resolvedCommits = mutableMapOf<String, String>()
     val issues = mutableListOf<JsonObject>()
     var failIssueWrites = false
     val labels = mutableSetOf<String>()
@@ -49,8 +51,13 @@ class DeliveryToolHarness(val root: Path) {
                     ok("")
                 }
             args.first() == "rev-parse" ->
-                ok(if (args[1] == "origin/${"trunk"}") tip else args[1].removeSuffix("^{commit}"))
-            args.first() == "merge-base" -> ok("")
+                ok(
+                    if (args[1] == "origin/${"trunk"}") tip
+                    else resolvedCommits[args[1]] ?: args[1].removeSuffix("^{commit}")
+                )
+            args.first() == "merge-base" ->
+                if ((args[2] to args[3]) in nonAncestors) CommandResult(1, "", "not an ancestor")
+                else ok("")
             args.take(2) == listOf("rev-list", "--count") -> ok(count(args[2]).toString())
             args.take(2) == listOf("rev-list", "--first-parent") ->
                 ok(counts.entries.sortedBy { it.value }.joinToString("\n") { it.key })
