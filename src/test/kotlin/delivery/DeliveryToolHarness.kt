@@ -14,6 +14,8 @@ class DeliveryToolHarness(val root: Path) {
     val nonAncestors = mutableSetOf<Pair<String, String>>()
     val resolvedCommits = mutableMapOf<String, String>()
     val issues = mutableListOf<JsonObject>()
+    var verificationFailure: VerificationFailure? = null
+    var commitSubject = "Fix saved settings"
     var failIssueWrites = false
     val labels = mutableSetOf<String>()
     val tags = mutableMapOf<String, Pair<String, String>>()
@@ -32,6 +34,32 @@ class DeliveryToolHarness(val root: Path) {
                 "git" -> git(call.args.drop(1))
                 "gh" -> github(call)
                 "asc" -> apple(call.args.drop(1))
+                "uname" -> ok("arm64")
+                "xcodebuild" -> ok("Xcode ${config.xcode}")
+                "./gradlew" -> {
+                    val failure = requireNotNull(verificationFailure)
+                    if (failure.testFailures.isNotEmpty()) {
+                        val report =
+                            requireNotNull(call.cwd)
+                                .resolve(config.verification.testReports.first())
+                                .createDirectories()
+                        report
+                            .resolve("TEST-fixture.xml")
+                            .writeText(
+                                "<testsuite>" +
+                                    failure.testFailures.joinToString("") {
+                                        "<testcase classname=\"${it.test.substringBeforeLast('.')}\" name=\"${it.test.substringAfterLast('.')}\"><failure message=\"test failed\"/></testcase>"
+                                    } +
+                                    "</testsuite>"
+                            )
+                    }
+                    requireNotNull(call.log)
+                        .appendText(
+                            if (failure.kind == FailureKind.VALIDATION) "There were failing tests\n"
+                            else "Runner disconnected\n"
+                        )
+                    CommandResult(1, "", "verification failed")
+                }
                 else -> error("Unexpected command: ${call.args}")
             }
         }
@@ -50,6 +78,13 @@ class DeliveryToolHarness(val root: Path) {
                     tip = remoteTip ?: tip
                     ok("")
                 }
+            args.first() == "worktree" -> {
+                if (args[1] == "add") Path.of(args[3]).createDirectories()
+                ok("")
+            }
+            args.take(3) == listOf("log", "-1", "--format=%s") -> ok(commitSubject)
+            args.take(3) == listOf("rev-list", "--reverse", "--topo-order") ->
+                ok(args.last().substringAfter(".."))
             args.first() == "rev-parse" ->
                 ok(
                     if (args[1] == "origin/${"trunk"}") tip

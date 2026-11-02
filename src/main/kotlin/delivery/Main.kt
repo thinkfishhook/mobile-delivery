@@ -84,6 +84,7 @@ internal fun runTask(
                         emptyList(),
                         testFailures = error.testFailures,
                         failingCommand = error.failingCommand,
+                        verificationFailureKind = error.kind,
                     ),
                 )
                 throw error

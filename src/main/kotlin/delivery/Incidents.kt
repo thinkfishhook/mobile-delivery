@@ -126,6 +126,7 @@ class GitHubIncidents(
                     is IncidentSubject.Credential,
                     is IncidentSubject.Hold,
                     is IncidentSubject.Receipt,
+                    IncidentSubject.RedStreak,
                     IncidentSubject.Audit,
                     IncidentSubject.AppStore,
                     IncidentSubject.Incidents,

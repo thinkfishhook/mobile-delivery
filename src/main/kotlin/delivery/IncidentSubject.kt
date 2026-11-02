@@ -16,6 +16,7 @@ sealed interface IncidentSubject {
     val title: String
         get() =
             when (this) {
+                RedStreak -> "TestFlight verification needs attention"
                 is BetaCommit -> "Beta delivery needs attention: ${sha.take(12)}"
                 is AppStoreVersion -> "App Store release needs attention: $version"
                 is ReviewSubmission -> "App Store release needs attention: review-submission-$id"
@@ -27,6 +28,11 @@ sealed interface IncidentSubject {
                 Incidents,
                 is Unknown -> "iOS delivery needs attention: $key"
             }
+
+    data object RedStreak : IncidentSubject {
+        override val ownerOnly = false
+        override val key = "red-streak"
+    }
 
     data class BetaCommit(val sha: String) : IncidentSubject {
         override val ownerOnly = false
@@ -101,6 +107,7 @@ sealed interface IncidentSubject {
             val match = Regex("(internal|appstore|hold|receipt|credential)/(.*)").matchEntire(key)
             if (match == null)
                 return when (key) {
+                    "red-streak" -> RedStreak
                     "audit" -> Audit
                     "appstore" -> AppStore
                     "incidents" -> Incidents

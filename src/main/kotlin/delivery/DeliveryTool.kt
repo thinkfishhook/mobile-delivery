@@ -39,6 +39,7 @@ class DeliveryTool(
                         emptyList(),
                         testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
                         failingCommand = (error as? VerificationFailure)?.failingCommand,
+                        verificationFailureKind = (error as? VerificationFailure)?.kind,
                     )
                 )
             throw error
@@ -194,8 +195,10 @@ class DeliveryTool(
                         "published=${receipt != null}\nversion=${receipt?.version ?: ""}\nbuild=${receipt?.number ?: ""}\n"
                     )
                 }
-                "finishRun" ->
+                "finishRun" -> {
+                    syncRedStreak(github, source, selected, output)
                     report(sweep, sweep.run(healthTip), env["IOS_EXECUTION_FAILED"] == "true")
+                }
                 "sweep" -> {
                     github.ensureDeliveryLabels()
                     report(sweep, sweep.run(healthTip), false)
@@ -206,6 +209,32 @@ class DeliveryTool(
         } catch (error: Exception) {
             deliveryFailed(error)
         }
+    }
+
+    private fun syncRedStreak(github: GitHub, source: GitSource, sha: String, output: Path) {
+        if (
+            env["GITHUB_EVENT_NAME"] != "push" ||
+                env["IOS_DELIVERY_ENABLED"] != "true" ||
+                env["IOS_EXECUTION_FAILED"] != "true"
+        )
+            return
+        val file = output.resolve("run-summary.json")
+        if (!file.exists()) return
+        val summary = json.decodeFromString<RunSummary>(file.readText())
+        if (
+            summary.runHealth != "failed" ||
+                summary.verificationFailureKind != FailureKind.VALIDATION
+        )
+            return
+        RedStreaks(github, config.incidentMarker)
+            .sync(
+                renderRedStreak(
+                    sha,
+                    source.git("log", "-1", "--format=%s", sha),
+                    workflowUrl(env),
+                    summary.failures,
+                )
+            )
     }
 
     private fun startRun(event: WorkflowEvent, start: StartRun, beta: BetaDelivery) {
@@ -244,6 +273,7 @@ class DeliveryTool(
                 emptyList(),
                 testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
                 failingCommand = (error as? VerificationFailure)?.failingCommand,
+                verificationFailureKind = (error as? VerificationFailure)?.kind,
             )
         )
         throw error
@@ -376,6 +406,7 @@ data class RunSummary(
     val testFailures: List<TestFailure> = emptyList(),
     val failingCommand: FailingCommand? = null,
     val failures: List<TestFailure> = testFailures,
+    val verificationFailureKind: FailureKind? = null,
 )
 
 internal fun writeRunSummary(root: Path, env: Map<String, String>, summary: RunSummary) {
