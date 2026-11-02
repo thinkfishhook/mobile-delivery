@@ -126,8 +126,19 @@ class GitHub(
                             )
                             .containsMatchIn(result.stderr))
             val error =
-                GitHubFailure(
-                    "GitHub API failed: ${path.substringBefore('?')} (${status?.let { "HTTP $it" } ?: "exit ${result.exit}"}${if (message.isEmpty()) "" else ": " + message.replace(Regex("\\s+"), " ").take(1000)})",
+                GitHubApiError(
+                    path,
+                    status,
+                    message,
+                    headers
+                        .lineSequence()
+                        .drop(1)
+                        .filter { ':' in it }
+                        .associate {
+                            it.substringBefore(':').trim().lowercase() to
+                                it.substringAfter(':').trim()
+                        },
+                    result.exit,
                     transient,
                     retryAfter,
                     labelAlreadyExists =
@@ -195,7 +206,7 @@ fun GitHub.queuedPush(sha: String) =
 
 internal fun JsonObject.string(key: String) = getValue(key).jsonPrimitive.content
 
-class GitHubFailure(
+open class GitHubFailure(
     message: String,
     val transient: Boolean,
     val retryAfterMs: Long?,

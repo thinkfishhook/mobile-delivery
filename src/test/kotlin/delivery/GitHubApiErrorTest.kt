@@ -76,4 +76,53 @@ class GitHubApiErrorTest {
         commands.respond = { CommandResult(1, "", "gh: Not Found (HTTP 404)") }
         assertNull(github.api("issues/1", missing = true))
     }
+
+    @Test
+    fun `API error exposes status path and normalized response headers`() {
+        val commands =
+            RecordingCommands().apply {
+                respond = {
+                    CommandResult(
+                        1,
+                        "HTTP/2.0 401 Unauthorized\r\n" +
+                            "GitHub-Authentication-Token-Expiration: 2026-11-03 12:34:56 UTC\r\n" +
+                            "X-GitHub-Request-Id: request-id\r\nContent-Type: application/json\r\n\r\n" +
+                            """{"message":"Bad credentials"}""",
+                        "HTTP 401",
+                    )
+                }
+            }
+        val error =
+            assertFailsWith<GitHubApiError> {
+                GitHub("owner/repo", commands, emptyMap()).api("git/refs?per_page=100")
+            }
+        assertEquals("git/refs?per_page=100", error.path)
+        assertEquals(401, error.status)
+        assertEquals(
+            mapOf(
+                "github-authentication-token-expiration" to "2026-11-03 12:34:56 UTC",
+                "x-github-request-id" to "request-id",
+                "content-type" to "application/json",
+            ),
+            error.headers,
+        )
+        assertEquals("GitHub API failed: git/refs (HTTP 401: Bad credentials)", error.message)
+    }
+
+    @Test
+    fun `stderr status and non HTTP failures expose absent headers`() {
+        for ((response, status) in
+            listOf(
+                CommandResult(1, "", "gh: Not Found (HTTP 404)") to 404,
+                CommandResult(7, "", "gh could not execute") to null,
+            )) {
+            val commands = RecordingCommands().apply { respond = { response } }
+            val error =
+                assertFailsWith<GitHubApiError> {
+                    GitHub("owner/repo", commands, emptyMap()).api("issues/1")
+                }
+            assertEquals(status, error.status)
+            assertTrue(error.headers.isEmpty())
+        }
+    }
 }
