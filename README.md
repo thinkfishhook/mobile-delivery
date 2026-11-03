@@ -9,8 +9,14 @@ Your repository owns the jobs, runners and secrets; each composite owns its deli
 ## Quick start
 
 Start with delivery disabled. A push will build and test your app and retain its evidence.
-It will not upload a build. The examples pin a tested source revision; the release
-cutover updates all four pins together to v1.0.0.
+It will not upload a build. The overlay pins all four actions to v1.0.0:
+
+```yaml
+- uses: thinkfishhook/mobile-delivery/testflight@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
+- uses: thinkfishhook/mobile-delivery/maintenance@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
+- uses: thinkfishhook/mobile-delivery/app-store-release@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
+- uses: thinkfishhook/mobile-delivery/app-store-rollout@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
+```
 
 You need an existing iOS app with passing automated tests, an App Store Connect API key,
 an Apple distribution certificate exported as a password-protected P12, an App Store
@@ -133,8 +139,7 @@ groups:
 
 Keep all four composites at the same full commit SHA with a `# vX.Y.Z` comment
 (for example `# v1.0.0`). Read [CHANGELOG.md](CHANGELOG.md), review the grouped diff,
-and run your app's verification before integrating. The cutover replaces the overlay's
-existing source pins with the v1.0.0 SHA and comment; a commit cannot contain its own SHA.
+and run your app's verification before integrating.
 The CLI zip on each release is for local bootstrap; composites install and cache their
 engine automatically.
 

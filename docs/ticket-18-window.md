@@ -66,3 +66,81 @@ recorded again after dating and before pushing the app branches.
   returned `enabled=true`. Owner changes complete. Poll succeeded within limit.
 - Dated `[1.0.0]` as 2026-11-03. The dated commit will become the final release
   candidate only after local and exact-SHA hosted checks pass.
+
+## Final candidate and release
+
+- Final dated candidate: `61b8c7c330c9b361dbf99be81d0e080f602d1bc5`.
+  Local `./gradlew --no-daemon check installDist` PASS; Gradle retained 388
+  passing tests, zero failures/errors/skips; documentation-only checks reused
+  test outputs. actionlint PASS; release-helper tests 5 PASS, drain-helper tests 9 PASS.
+- Pushed candidate to public trunk, fast-forward from `0d08ff3`. The only three
+  new commits are this ticket's rehearsal, authorization and dated release commits.
+  Public heads API lists only trunk; clean-history root remains
+  `dfe3aad73ac4a80ac26d29d1d2ba7eb06dece431`.
+- All three hosted workflows completed SUCCESS on exact candidate:
+  [Check](https://github.com/thinkfishhook/mobile-delivery/actions/runs/41702774196),
+  [Engine self-test](https://github.com/thinkfishhook/mobile-delivery/actions/runs/41702774191),
+  [Composite self-test](https://github.com/thinkfishhook/mobile-delivery/actions/runs/41702774111).
+  macOS jobs initially queued for roughly ten minutes before running successfully.
+- Annotated `v1.0.0` created at the candidate and pushed after hosted checks passed.
+  [Release workflow](https://github.com/thinkfishhook/mobile-delivery/actions/runs/41704577075)
+  completed SUCCESS. [Stable release](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.0.0)
+  published at 19:37 UTC with CLI zip and `.zip.sha256`. Downloaded both assets;
+  SHA-256 matches `1e873550188486abe661e82c1d8157be04e761fced629840284d3df09aead66c`.
+  ZIP CRC passed, containing launcher, Windows launcher and six runtime jars.
+  `GET git/ref/tags/v1` confirms lightweight commit ref at exact candidate.
+- Exact final candidate exported and CLI built again in ignored
+  `build/ticket-18/final-candidate`; all 24 app caller checks PASS again.
+  actionlint PASS for all three apps with documented concurrency.queue schema exclusion.
+
+## Final app push ranges before publication
+
+Fresh live-default queries confirm clean app worktrees and these entire ranges:
+
+- CordKeeper: default `06210e9e10b4b3e8fe70d1d5c428356876e7df26`, exactly one
+  commit `70daa6e87469ddae8437f4a6e3624a6055634f61` (re-pin and original ticket 14
+  permission/Dependabot changes).
+- Red Word Farmer: default `a5fc26474d986fc7b461beca6fe7c57b09e0e01b`, exactly one
+  commit `a5ff5ec1fc8e1a4d8aaf704f497bb1f2c2e47468` (re-pin and required permission).
+  Unrelated local trunk/Mission commits are excluded.
+- ExpressiveVocab: default `a644ce91fd52ac27ee03b95e7b2a33f5f40265c8`, four commits:
+  `7660bf62cbe46c4ca282a6153817143269242ec9` (original re-pin),
+  `bd32796bbad713f87d1dbb0ce59aa5cfa15e1bed` (allowed Gradle-cache fix),
+  `2a2327d0cc8bcbf4e014264e88f9230fa45965ac` (ticket 49 evidence),
+  `07edc21efa948d727e62eb5bd89563dd3dc75fd5` (dated-candidate pin refresh).
+  An initial amend mistakenly included the pin refresh in the evidence commit;
+  immediately restored the exact original evidence commit and created the separate
+  pin commit above, before any app push.
+
+All 12 final references pin `61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0`.
+Read-only Actions queries across all three apps found zero runs created between
+19:19:55 UTC and the pre-publication snapshot, so no observed rename-related run failure.
+
+## App merges and resumption
+
+- [CordKeeper PR 128](https://github.com/thinkfishhook/CordKeeper/pull/128) merged
+  19:39:57 UTC, merge `4f95c62b002db3b4874cec6da38498218c7b9de8`.
+- [Red Word Farmer PR 198](https://github.com/thinkfishhook/Red-Word-Farmer/pull/198)
+  merged 19:40:33 UTC, merge `e9979f735bcc111a450625f48508034f145198bd`.
+- [ExpressiveVocab PR 15](https://github.com/thinkfishhook/ExpressiveVocab/pull/15)
+  merged 19:40:47 UTC, merge `35d37bab324fd6afc8b003a8485deaa7ccf728d3`.
+- PR bodies contain archive rollback pins. Merged normally without admin/bypass
+  options. RWF/EV PR CI was still pending at merge; offline caller checks and exact
+  tool checks were green, and first post-merge deliveries are watched below.
+- Verified all 12 references by reading each workflow from the live default branch
+  via GitHub contents API. Informed owner pushes and dispatches may resume.
+- Updated assigned clone origin to `https://github.com/thinkfishhook/mobile-delivery.git`.
+
+## Quickstart pins, test first
+
+- Extended QuickstartTest to require all four actions in the overlay and README,
+  eight references total, identical full SHA and exact `# v1.0.0` comments.
+- Initial test harness Path list construction failed with NoSuchFileException;
+  corrected it before the meaningful red run. Meaningful red: AssertionError
+  expected `[v1.0.0]`, actual `[v1 preview (unreleased)]`.
+- Updated four overlay references and README examples to the released SHA, removed
+  obsolete future-cutover wording from README and quickstart instructions.
+- `./gradlew --no-daemon format check installDist` PASS; 389 tests, zero
+  failures/errors/skips; formatting, Detekt and workflow checks PASS.
+  actionlint PASS; release helper tests 5 PASS; drain helper tests 9 PASS.
+  Full red/green logs retained in ignored `build/ticket-18/`.

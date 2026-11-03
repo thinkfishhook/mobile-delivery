@@ -6,8 +6,31 @@ import kotlin.test.*
 import org.junit.Test
 
 class QuickstartTest {
-    private val overlay =
-        Path.of(System.getProperty("delivery.root")).resolve("examples/quickstart")
+    private val repository = Path.of(System.getProperty("delivery.root"))
+    private val overlay = repository.resolve("examples/quickstart")
+
+    @Test
+    fun `README and quickstart pin all four composites to the same v1 release`() {
+        val composites =
+            setOf("testflight", "maintenance", "app-store-release", "app-store-rollout")
+        val reference =
+            Regex("thinkfishhook/mobile-delivery/([a-z-]+)@([a-f0-9]{40}) # ([^\\r\\n]+)")
+        val files =
+            overlay.resolve(".github/workflows").listDirectoryEntries("*.yml") +
+                listOf(repository.resolve("README.md"))
+        val pins = files.flatMap { reference.findAll(it.readText()).toList() }
+        assertEquals(setOf("v1.0.0"), pins.map { it.groupValues[3] }.toSet())
+        assertEquals(8, pins.size)
+        for (file in files) {
+            val matches = reference.findAll(file.readText()).toList()
+            assertEquals(
+                if (file.name == "README.md") composites else setOf(file.nameWithoutExtension),
+                matches.map { it.groupValues[1] }.toSet(),
+                file.name,
+            )
+        }
+        assertEquals(1, pins.map { it.groupValues[2] }.toSet().size)
+    }
 
     @Test
     fun `every quickstart push workflow excludes receipt tags`() {
