@@ -82,6 +82,9 @@ arguments from the app checkout. Gradle is not needed for the downloaded CLI.
 The v1.0.0 cutover follows the approved drain, repository move and app pinning plan.
 Publishing a tool release does not enable App Store automation in apps that use it.
 
+For post-release portfolio validation, follow the [acceptance evidence guide](docs/portfolio-acceptance.md).
+Keep live observations separate from configuration checks and local fixture results.
+
 ## Moving a pinned repository
 
 Before renaming a repository used by pinned workflow actions, pause the callers' delivery
