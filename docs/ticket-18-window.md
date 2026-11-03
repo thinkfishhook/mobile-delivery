@@ -27,12 +27,14 @@ changes. No other remote activity is authorized outside ticket 18's marked steps
 - Red Word Farmer dedicated pin branch rebased onto integrated app-checks
   trunk `a5fc26474d986fc7b461beca6fe7c57b09e0e01b`, then four pins refreshed;
   local amended commit `306b64098ee9943027e5d5d4286bb509fda8d807`.
-- ExpressiveVocab remains `7660bf62cbe46c4ca282a6153817143269242ec9`, already
-  pinning the candidate.
+- The original rehearsal recorded ExpressiveVocab at
+  `7660bf62cbe46c4ca282a6153817143269242ec9`, already pinning the candidate.
+  Fresh final ranges below account for the subsequent allowed ticket 49 commits.
 - actionlint PASS for both amended apps with the documented newer-schema
   `unexpected key "queue"` exclusion. Whitespace checks PASS.
-- Each dedicated pin branch remains exactly one commit ahead of its remote
-  default; Red Word Farmer now also includes the integrated app-checks parent.
+- Original rehearsal ranges were one re-pin commit each. Red Word Farmer now
+  includes the integrated app-checks parent. The fresh final range inspection
+  below supersedes that original range record for ExpressiveVocab.
 - At 18:43:12–18:43:36 UTC ran the rehearsal's full 15-target drain command
   with `--wait --timeout 5400 --interval 30`: exit 0, exact output:
 
@@ -144,3 +146,52 @@ Read-only Actions queries across all three apps found zero runs created between
   failures/errors/skips; formatting, Detekt and workflow checks PASS.
   actionlint PASS; release helper tests 5 PASS; drain helper tests 9 PASS.
   Full red/green logs retained in ignored `build/ticket-18/`.
+
+## Final watched outcomes
+
+Quickstart commit `b31a7c5296ac2876ffe5be3db2b8f498ba2cff79` was pushed to public
+trunk. Its Check and Engine self-test succeeded. Composite self-test attempt 1
+failed because the hosted macOS job was never acquired: zero steps and no runner
+name, with annotation "The job was not acquired by Runner of type hosted even
+after multiple attempts" and notices explicitly citing macOS arm64 capacity.
+Retried only the unsuccessful job. Attempt 2 completed SUCCESS at 20:03:47 UTC:
+[Composite self-test](https://github.com/thinkfishhook/mobile-delivery/actions/runs/41706026752).
+No source change or app rollback was required. This was after the already-green
+checks on the immutable v1.0.0 release candidate.
+
+All three first delivery-branch pushes on v1.0.0 completed SUCCESS, with
+`IOS_DELIVERY_ENABLED=true` and `DELIVERY_ACTION_SHA=61b8c7c330c9b361dbf99be81d0e080f602d1bc5`
+in their logs. Receipt tags independently queried through GitHub's tags API
+peel to their exact re-pin merge commits:
+
+| App and first run | Runner | Job start–completion (UTC) | Receipt tag | Queue wait from run creation |
+| --- | --- | --- | --- | --- |
+| [CordKeeper 41705377422](https://github.com/thinkfishhook/CordKeeper/actions/runs/41705377422) | Fish-Hook-002 | 19:40:04–21:31:26 | `deploy/testflight/26.11.01/1556.1` | 4s |
+| [Red Word Farmer 41705472450](https://github.com/thinkfishhook/Red-Word-Farmer/actions/runs/41705472450) | Fish-Hook-003 | 19:55:24–20:22:15 | `deploy/testflight/26.11.01/757.1` | 14m48s |
+| [ExpressiveVocab 41705510026](https://github.com/thinkfishhook/ExpressiveVocab/actions/runs/41705510026) | Fish-Hook-001 | 20:22:48–20:58:28 | `deploy/testflight/26.11.01/130.1` | 41m58s |
+
+All dates above are 2026-11-03. Queue contention coincided with the EV branch/PR/main
+CI workloads on the same three Macs. Record this for portfolio queue-impact
+acceptance; it is not a general performance/capacity guarantee. The watcher
+recorded all three successful outcomes by 21:31:37 UTC; the final fresh API
+verification and evidence collection occurred at approximately 22:12–22:15 UTC.
+No app rollback was needed. Full run/job JSON and masked hosted logs remain in
+ignored `build/ticket-18/`; no large evidence artifact download was needed.
+
+The 22:15 UTC Actions snapshot of all three apps since 19:19:55 UTC contains only
+successful runs: CK delivery and an automatic Dependabot update; RWF delivery and
+two App checks runs; EV delivery and three CI runs. No observed rename-related
+workflow failure. No delivery was cancelled.
+
+[Public acceptance tracking issue #1](https://github.com/thinkfishhook/mobile-delivery/issues/1)
+is open, listing remaining acceptance checks. Updated the three first-delivery
+items as complete with run and receipt evidence. Scheduled sweeps, full Dependabot
+upgrade proof, real-red/red-streak/cancellation/trigger proofs, seven-day billing
+and final archive handoff remain portfolio-follow-up work, not ticket 18 claims.
+
+Final verification: public repo remains PUBLIC with vulnerability reporting enabled;
+archive remains PRIVATE/unarchived with organization Actions access; v1 still
+points at the v1.0.0 candidate; public trunk is the quickstart commit above;
+assigned clone origin uses the public repository URL. This final evidence-only
+update is committed locally for Mission submission and does not move public trunk
+or the release tags.
