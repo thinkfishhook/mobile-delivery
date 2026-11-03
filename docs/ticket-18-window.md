@@ -33,7 +33,36 @@ changes. No other remote activity is authorized outside ticket 18's marked steps
   `unexpected key "queue"` exclusion. Whitespace checks PASS.
 - Each dedicated pin branch remains exactly one commit ahead of its remote
   default; Red Word Farmer now also includes the integrated app-checks parent.
-- Awaiting the owner's confirmation that pushes and dispatches are paused.
+- At 18:43:12–18:43:36 UTC ran the rehearsal's full 15-target drain command
+  with `--wait --timeout 5400 --interval 30`: exit 0, exact output:
+
+  ```text
+  Drained: no queued, in_progress, waiting or pending runs in the selected workflows.
+  ```
+
+- Owner subsequently reported Fish-Hook-001 through Fish-Hook-003 all Idle.
+  Reminded owner to keep producers paused; runner idle alone is not a producer lock.
+- At 18:44 UTC began 30-second GitHub polling, bounded to 90 minutes.
+  Original clean repository ID is `1431647751`; private original is `1424383675`.
+  Poll requires those identities at public mobile-delivery and unarchived private
+  mobile-delivery-archive, plus enabled private vulnerability reporting.
+  Raw timestamped observations are in ignored `build/ticket-18/owner-poll.jsonl`.
+- Owner informed that repository changes can begin and app activity must remain
+  paused through re-pin merges. No owner repository change observed yet.
 
 Release dating will change the candidate; final pin SHAs and checks must be
 recorded again after dating and before pushing the app branches.
+
+## Owner changes observed
+
+- Refreshed full drain check, 19:19:55–19:20:19 UTC: exit 0, same drained
+  output as above; no runs cancelled.
+- 19:20:23 UTC: original private repository ID observed at mobile-delivery-archive,
+  private and unarchived.
+- 19:20:54 UTC: clean repository ID observed at mobile-delivery, still private.
+  Archive Actions access API returned `access_level=organization`.
+- 19:21:59 UTC: clean repository PUBLIC, archive PRIVATE and unarchived;
+  `GET repos/thinkfishhook/mobile-delivery/private-vulnerability-reporting`
+  returned `enabled=true`. Owner changes complete. Poll succeeded within limit.
+- Dated `[1.0.0]` as 2026-11-03. The dated commit will become the final release
+  candidate only after local and exact-SHA hosted checks pass.
