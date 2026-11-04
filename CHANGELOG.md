@@ -3,6 +3,19 @@
 All notable changes are documented here in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 format. Releases use [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-11-04
+
+### Fixed
+
+- Credential incidents close as completed after the secret next works: authenticated App
+  Store Connect use, a validated signing identity and profile, or a new receipt write.
+- Real TestFlight deliveries interrupted by cancellation keep their existing evidence when
+  the runner can still upload it. Superseded runs still upload nothing.
+
+### Removed
+
+- Consumer-specific cutover and observation notes from the tracked tree.
+
 ## [1.0.1] - 2026-11-03
 
 ### Added
