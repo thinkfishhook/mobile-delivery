@@ -95,3 +95,20 @@ Mission implementation branch.
 The remote and local `spike/ticket-22-self-cancel` branches were deleted after
 all six run/job records and logs were collected. No workflow changes were made
 to `trunk`. Only this final decision record is intended for integration.
+
+## Queue-delay review follow-up
+
+The measured 69–84-second cancellation delay remains a known queue cost, not a
+verified performance fix. A read-only review-time sample found no natural
+post-cutover cancelled delivery from which to measure a production improvement.
+Returning immediately is unsafe: the experiment above executed later steps and
+saved cache before cancellation. A shorter deadline would fail runs rather than
+make GitHub cancel them faster. Force cancellation could also suppress needed
+cleanup. None of these alternatives is enabled without a new approved experiment.
+
+For the first naturally superseded run, collect the cancellation request time,
+runner interruption, job completion, next same-group job start and conclusion,
+and confirm no verification/archive/upload work ran. Compare queued depth and
+waits with normal tip deliveries on the shared runner pool. Keep the raw consumer
+run links and identities in private operational records. The queue comparison and
+any change to the cancellation protocol remain unresolved live follow-up.

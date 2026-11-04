@@ -186,7 +186,7 @@ runs:
       run: mobile-delivery uploadBeta
     - name: Retain verification and delivery evidence
       id: evidence
-      if: ${{ !cancelled() && steps.start.outputs.operation != 'none' }}
+      if: ${{ always() && steps.start.outputs.operation != 'none' }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ios-delivery-${{ github.run_id }}-${{ github.run_attempt }}

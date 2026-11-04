@@ -55,6 +55,31 @@ internal fun publishCredentialProblem(
     return repairErrors
 }
 
+// Only successful use of these exact credentials is proof of recovery. An unrelated sweep
+// must not close owner alerts for secrets it never exercised.
+internal fun resolveCredentialIncidents(
+    secrets: Set<String>,
+    config: DeliveryConfig,
+    commands: Commands,
+    env: Map<String, String>,
+) {
+    if (env["GH_TOKEN"].isNullOrBlank() || env["GITHUB_REPOSITORY"].isNullOrBlank()) return
+    try {
+        val github = GitHub(env.getValue("GITHUB_REPOSITORY"), commands, env)
+        GitHubIncidents(github, config.incidentMarker, workflowInputs(env)?.branch ?: "delivery")
+            .sync(emptyList(), env["GITHUB_SHA"].orEmpty()) {
+                it is IncidentSubject.Credential && it.secret in secrets
+            }
+    } catch (_: Exception) {
+        annotate(
+            Annotation(
+                "warning",
+                "Credential use succeeded, but its incident could not be closed; retry after restoring GitHub issue access.",
+            )
+        )
+    }
+}
+
 internal fun safeTokenExpiration(value: String): String? = value.takeIf {
     Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ T][0-9:]+(?:Z| UTC|[+-][0-9:]+)?)?").matches(it)
 }

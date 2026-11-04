@@ -62,6 +62,28 @@ class WorkflowChecksTest {
         }
 
     @Test
+    fun `evidence policy accepts interrupted real deliveries but rejects cancellation suppression`() =
+        temp { root ->
+            copyComposites(root)
+            val path = root.resolve("testflight/action.yml")
+            val original = path.readText()
+            val restored =
+                original.replace(
+                    "if: \${{ !cancelled() && steps.start.outputs.operation != 'none' }}",
+                    "if: \${{ always() && steps.start.outputs.operation != 'none' }}",
+                )
+            path.writeText(restored)
+            CompositeChecks().validate(root, listOf("testflight"))
+            path.writeText(
+                restored.replace(
+                    "always() && steps.start.outputs.operation != 'none'",
+                    "!cancelled() && steps.start.outputs.operation != 'none'",
+                )
+            )
+            assertFails { CompositeChecks().validate(root, listOf("testflight")) }
+        }
+
+    @Test
     fun `composites cannot silently lose a required phase`() = rejectPhaseChanges { steps, phase ->
         steps.filter { it !== phase }
     }
@@ -124,7 +146,7 @@ class WorkflowChecksTest {
                     original.replace("if: steps.prepare.outputs.retain == 'true'", "if: always()"),
                     original.replace("id: prepare", "id: build"),
                     original.replace(
-                        "!cancelled() && steps.start.outputs.operation != 'none'",
+                        "always() && steps.start.outputs.operation != 'none'",
                         "always()",
                     ),
                     original.replace(

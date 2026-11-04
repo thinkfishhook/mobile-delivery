@@ -214,6 +214,16 @@ class Signing(
                 require(matches.size == 1) { report }
                 println(report)
             }
+            resolveCredentialIncidents(
+                setOf(
+                    "IOS_DISTRIBUTION_P12_BASE64",
+                    "IOS_DISTRIBUTION_P12_PASSWORD",
+                    "IOS_PROFILE_BASE64",
+                ),
+                config,
+                commands,
+                env,
+            )
             if (diagnostic) return action(SigningIdentity(decoded.uuid, matches.single()))
             security(
                 "set-key-partition-list",

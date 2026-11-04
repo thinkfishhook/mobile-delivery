@@ -142,11 +142,10 @@ internal class CompositeChecks {
                 val evidence = steps.indexOfFirst {
                     it["id"] == "evidence" &&
                         artifact(it) &&
-                        it["if"] ==
-                            "\${{ !cancelled() && steps.start.outputs.operation != 'none' }}"
+                        it["if"] == "\${{ always() && steps.start.outputs.operation != 'none' }}"
                 }
                 require(evidence >= 0 && evidence < finish) {
-                    "$file: retain evidence before the final sweep unless cancelled or superseded"
+                    "$file: retain interrupted delivery evidence before the final sweep unless superseded"
                 }
             }
         }

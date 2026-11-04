@@ -10,6 +10,36 @@ class ReceiptCredentialTest {
         Receipt("abc", MarketingVersion("26.09.01"), BuildNumber("234.1"), "build")
 
     @Test
+    fun `only a successful receipt ref write confirms token recovery`() = temp { root ->
+        val h = DeliveryToolHarness(root)
+        val tags = GitHubReceiptTags(GitHub("owner/repo", h.commands, emptyMap()))
+        var successes = 0
+        tags.onCredentialSuccess = { successes++ }
+        val name = "deploy/testflight/26.09.01/234.1"
+        tags.write(name, "abc", receipt)
+        assertEquals(1, successes)
+        tags.write(name, "abc", receipt)
+        assertEquals(
+            1,
+            successes,
+        ) // merely reading an existing receipt cannot prove write permissions
+        val original = h.commands.respond!!
+        h.commands.respond = { call ->
+            if (call.args.getOrNull(2)?.endsWith("/git/refs") == true)
+                throw GitHubApiError("git/refs", 401, "rejected", emptyMap())
+            else original(call)
+        }
+        assertFailsWith<CredentialProblem> {
+            tags.write(
+                "deploy/testflight/26.09.01/235.1",
+                "abc",
+                receipt.copy(number = BuildNumber("235.1")),
+            )
+        }
+        assertEquals(1, successes)
+    }
+
+    @Test
     fun `accepted upload reports credential problem without losing delivered outcome`() =
         temp { root ->
             for (status in listOf(401, 403)) {

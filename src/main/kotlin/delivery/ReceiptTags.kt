@@ -33,6 +33,7 @@ fun requireReceiptNames(prefix: String, names: Set<String>): Set<String> = names
 }
 
 class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
+    internal var onCredentialSuccess: () -> Unit = {}
     internal var onCredentialProblem: (CredentialProblem) -> Unit = {}
 
     // matching-refs ignores paging parameters and always returns every match.
@@ -116,6 +117,7 @@ class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
                 },
                 receiptToken = true,
             )
+            onCredentialSuccess()
         } catch (error: Exception) {
             // Authentication failures cannot be repaired by reading the same ref again.
             if (

@@ -16,13 +16,27 @@ class Asc(
 ) : Apple {
     val ignoredVersions = linkedSetOf<String>()
 
+    private val recoveryEnvironment = env
+
     private val environment =
         toolEnvironment(env, "ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY") +
             mapOf("ASC_STRICT_AUTH" to "true")
 
+    private var credentialConfirmed = false
+
     private fun invoke(args: List<String>, log: Path? = null): String {
         try {
-            return executeAsc(commands, args, environment, log)
+            return executeAsc(commands, args, environment, log).also {
+                if (!credentialConfirmed) {
+                    resolveCredentialIncidents(
+                        setOf("ASC_PRIVATE_KEY"),
+                        config,
+                        commands,
+                        recoveryEnvironment,
+                    )
+                    credentialConfirmed = true
+                }
+            }
         } catch (error: AscError) {
             throw error.credentialProblem() ?: error
         }

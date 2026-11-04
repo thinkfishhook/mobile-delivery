@@ -495,6 +495,13 @@ always stays valid. `firstRed` and `testedCount` survive commit-list reduction. 
 run artifact for full evidence when `truncation` is nonempty. If human notes alone prevent a
 bounded update, the write fails with an explanation rather than deleting those notes.
 
+Credential incidents close as completed only after the corresponding credential works:
+API-key authentication succeeds, a signing identity and profile validate, or a new
+receipt ref is written. An unrelated sweep or a read of an existing receipt does not
+prove that a rotated signing secret or receipt token has the required permissions.
+If issue access fails, delivery continues with a warning and a later successful use
+can retry the closure.
+
 To see what keeps coming back, count recent incidents by title:
 
 ```sh
@@ -512,10 +519,11 @@ gh issue list --label ios-delivery --state all --limit 500 --search "created:>=$
 
 ## Evidence
 
-Runs other than cancelled or superseded runs upload `ios-delivery-<run>-<attempt>` (verification reports and `build/delivery/`,
+Runs other than superseded runs attempt to upload `ios-delivery-<run>-<attempt>` (verification reports and `build/delivery/`,
 including `run-summary.json`) for 90 days. It is uploaded before the final sweep, because a
-cancelled job loses its token within minutes. Each build's IPA, dSYMs and manifest are
-retained as `ios-build-<number>` and read back with checksum validation before any upload.
+cancelled job loses its token within minutes. Interrupted real deliveries retain evidence
+when the runner and token remain available; forced termination can still prevent upload.
+Each build's IPA, dSYMs and manifest are retained as `ios-build-<number>` and read back with checksum validation before any upload.
 TestFlight "What to Test" notes end with `Commit <sha>`, so testers and sweeps can tell
 which commit a build came from.
 

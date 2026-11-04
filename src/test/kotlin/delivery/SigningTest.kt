@@ -10,6 +10,65 @@ import org.junit.Test
 
 class SigningTest {
     @Test
+    fun `successful identity validation resolves signing incidents even if archive later fails`() =
+        temp { home ->
+            val commands = signingCommands()
+            val original = commands.respond!!
+            val closed = mutableListOf<String>()
+            val secrets =
+                listOf(
+                    "IOS_DISTRIBUTION_P12_BASE64",
+                    "IOS_DISTRIBUTION_P12_PASSWORD",
+                    "IOS_PROFILE_BASE64",
+                    "ASC_PRIVATE_KEY",
+                )
+            commands.respond = { call ->
+                if (call.args.first() != "gh") original(call)
+                else {
+                    val path = call.args[2]
+                    val response =
+                        if ("issues?" in path) {
+                            JsonArray(
+                                    secrets.mapIndexed { index, secret ->
+                                        buildJsonObject {
+                                            put("number", index + 1)
+                                            put(
+                                                "body",
+                                                "<!-- ${config.incidentMarker}:credential/$secret -->",
+                                            )
+                                        }
+                                    }
+                                )
+                                .toString()
+                        } else {
+                            closed += path.substringAfterLast('/')
+                            assertEquals(
+                                "completed",
+                                json
+                                    .parseToJsonElement(call.input!!)
+                                    .jsonObject
+                                    .string("state_reason"),
+                            )
+                            "{}"
+                        }
+                    CommandResult(0, response, "")
+                }
+            }
+            val env =
+                signingEnv(home) + mapOf("GH_TOKEN" to "job", "GITHUB_REPOSITORY" to "owner/repo")
+            assertFails {
+                Signing(config, commands, env + ("IOS_PROFILE_BASE64" to "%%%")).withIdentity {}
+            }
+            assertTrue(closed.isEmpty())
+            assertFails {
+                Signing(config, commands, env).withIdentity {
+                    error("archive failed after credential validation")
+                }
+            }
+            assertEquals(listOf("1", "2", "3"), closed)
+        }
+
+    @Test
     fun `release binaries have no caller-specific SDK requirements by default`() {
         validateReleaseBinary("an app without embedded SDK keys".toByteArray())
     }

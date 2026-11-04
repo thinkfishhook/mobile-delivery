@@ -20,6 +20,31 @@ class AscCredentialTest {
     }
 
     @Test
+    fun `only successful authenticated ASC use resolves its credential incident once`() {
+        var accepted = false
+        var reads = 0
+        val commands =
+            RecordingCommands().apply {
+                respond = { call ->
+                    if (call.args.first() == "asc") {
+                        if (accepted) fixture("200") else fixture("401")
+                    } else {
+                        reads++
+                        CommandResult(0, "[]", "")
+                    }
+                }
+            }
+        val asc =
+            Asc(config, commands, mapOf("GH_TOKEN" to "job", "GITHUB_REPOSITORY" to "owner/repo"))
+        assertFailsWith<CredentialProblem> { asc.uploads() }
+        assertEquals(0, reads)
+        accepted = true
+        asc.uploads()
+        asc.uploads()
+        assertEquals(1, reads)
+    }
+
+    @Test
     fun `rejected keys name secrets and repair commands without provider text`() {
         for (name in listOf("401", "403", "malformed")) {
             val commands =

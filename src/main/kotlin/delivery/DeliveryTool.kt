@@ -68,6 +68,9 @@ class DeliveryTool(
         val source = GitSource(root, config, commands, branch)
         val tags =
             GitHubReceiptTags(github).apply {
+                onCredentialSuccess = {
+                    resolveCredentialIncidents(setOf("IOS_RECEIPT_TOKEN"), config, commands, env)
+                }
                 onCredentialProblem = { problem ->
                     if (receiptProblems.put(problem.secret, problem.message!!) == null) {
                         credentialRepairErrors +=

@@ -133,6 +133,8 @@ class GitHubIncidents(
                 if (covered)
                     "Verification failure tracked in https://github.com/${github.repo}/issues/${streak!!.string("number")}."
                 else if (superseded) "Superseded by $branch $tip; this commit was not delivered."
+                else if (key is IncidentSubject.Credential)
+                    "Resolved; successful credential use verified ${key.secret} at $tip."
                 else "Resolved; the last sweep found nothing to do."
             github.api(
                 "issues/${issue.string("number")}",

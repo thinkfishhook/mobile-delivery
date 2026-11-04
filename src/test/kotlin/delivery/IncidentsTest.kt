@@ -43,6 +43,8 @@ class IncidentsTest {
             val state = if (superseded) "SUPERSEDED" else "RESOLVED"
             val wording =
                 if (superseded) "Superseded by trunk new; this commit was not delivered."
+                else if (key.startsWith("credential/"))
+                    "Resolved; successful credential use verified ${key.substringAfter("credential/")} at new."
                 else "Resolved; the last sweep found nothing to do."
             assertEquals(
                 "$marker\n\n$start\nState: $state\n\n$wording\n$end",
