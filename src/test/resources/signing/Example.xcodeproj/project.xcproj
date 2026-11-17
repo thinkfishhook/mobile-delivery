@@ -5,12 +5,17 @@
   "localizations": { "development": "en", "supported": [ "Base", ], },
   "files": [
     { "kind": "folder", "path": "Sources", "target-membership": [ "iosApp" ], },
+    { "kind": "group", "name": "Products", "children": [
+      { "path": "<PRODUCTS>/iosApp.app", "id": "AAA000000000000000000002", "type": "wrapper.application", "index": false },
+      { "path": "<PRODUCTS>/Resources.bundle", "id": "BBB000000000000000000002", "type": "wrapper.cfbundle", "index": false },
+    ], },
   ],
   "packages": [ { "kind": "local", "path": "SharedKit", }, ],
   "targets": [
     {
       "name": "iosApp",
       "id": "AAA000000000000000000001",
+      "product": "Products/iosApp.app",
       "product-type": "application",
       "build-phases": [
         "compile-sources", "frameworks", "resources",
@@ -34,6 +39,7 @@
     },
     {
       "name": "Resources", "id": "BBB000000000000000000001", "product-type": "bundle",
+      "product": "Products/Resources.bundle",
       "build-phases": [ "resources", ],
       "build-settings": { "CODE_SIGN_STYLE": "Automatic", "PRODUCT_BUNDLE_IDENTIFIER": "org.example.resources", },
     },

@@ -90,7 +90,11 @@ private fun hierarchicalSigningProject(
         (name as? JsonPrimitive)?.takeIf { value -> value.isString }?.content
             ?: throw ArtifactError("Unsupported project.xcproj configuration")
     }
-    if (names.count { it == "Release" } != 1 || names.distinct().size != names.size)
+    if (
+        names.count { it == "Release" } != 1 ||
+            names.distinct().size != names.size ||
+            names.any { it.isBlank() || it.any { char -> char in "[]*?=" } }
+    )
         throw ArtifactError("Expected one app Release configuration without duplicate names")
     val targets =
         (document["targets"] as? JsonArray)?.map {
@@ -114,9 +118,25 @@ private fun hierarchicalSigningProject(
         // A more specific SDK/architecture/wildcard condition could defeat the overlay.
         if (names.none { key == "$base[config=$it]" })
             throw ArtifactError("Unsupported conditional signing/version setting: $key")
+        if (base in settings && key != "$base[config=Release]")
+            throw ArtifactError(
+                "Ambiguous common and configuration-specific signing/version setting: $key"
+            )
     }
-    val release = overlay.mapKeys { "${it.key}[config=Release]" }
-    val updated = JsonObject(target + ("build-settings" to JsonObject(settings + release)))
+    // Xcode 27.2 can let an unconditional value shadow its config-qualified counterpart.
+    // Expand only the six managed keys across the declared configurations before replacing Release.
+    val updatedSettings = settings.toMutableMap()
+    for ((key, value) in overlay) {
+        updatedSettings.remove(key)?.let { common ->
+            names
+                .filter { it != "Release" }
+                .forEach { name ->
+                    updatedSettings.putIfAbsent("$key[config=$name]", common)
+                }
+        }
+        updatedSettings["$key[config=Release]"] = value
+    }
+    val updated = JsonObject(target + ("build-settings" to JsonObject(updatedSettings)))
     return JsonObject(
         document +
             ("targets" to JsonArray(targets.mapIndexed { i, t -> if (i == index) updated else t }))

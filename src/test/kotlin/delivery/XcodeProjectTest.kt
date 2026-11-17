@@ -18,6 +18,30 @@ class XcodeProjectTest {
     private val identity = SigningIdentity("profile", "certificate")
 
     @Test
+    fun `hierarchical project restores exact bytes when archive fails`() = temp { root ->
+        val project = root.resolve(config.ios.project).resolve("project.xcproj")
+        project.parent.createDirectories()
+        val original = fixture.replace("\n", "\r\n").toByteArray()
+        project.writeBytes(original)
+        val commands = RecordingCommands()
+        val failure = CommandError("archive failed", exit = 65)
+        val observed =
+            assertFailsWith<CommandError> {
+                Signing(config, commands, emptyMap()).withProject(root, build, identity) {
+                    assertContains(
+                        project.readText(),
+                        "PROVISIONING_PROFILE_SPECIFIER[config=Release]",
+                    )
+                    throw failure
+                }
+            }
+        assertSame(failure, observed)
+        assertContentEquals(original, project.readBytes())
+        assertTrue(commands.calls.isEmpty())
+        assertFalse(project.parent.resolve("project.pbxproj").exists())
+    }
+
+    @Test
     fun `ambiguous or unsupported project formats never reach archive or mutate source`() =
         temp { root ->
             val directory = root.resolve(config.ios.project).createDirectories()
@@ -78,6 +102,10 @@ class XcodeProjectTest {
                         "CODE_SIGN_STYLE[config=Release]",
                         "CODE_SIGN_STYLE[config=Rel*]",
                     ),
+                    fixture.replace(
+                        "CODE_SIGN_STYLE[config=Release]",
+                        "CODE_SIGN_STYLE[config=Debug]",
+                    ),
                 )
             invalid.forEach { contents ->
                 project.writeText(contents)
@@ -85,6 +113,36 @@ class XcodeProjectTest {
                 assertEquals(contents, project.readText())
             }
             assertTrue(commands.calls.isEmpty())
+        }
+
+    @Test
+    fun `configuration objects and custom configurations retain unrelated settings`() =
+        temp { root ->
+            val project = root.resolve(config.ios.project).resolve("project.xcproj")
+            project.parent.createDirectories()
+            val contents =
+                fixture.replace(
+                    "\"Debug\", \"Release\",",
+                    "\"Debug\", {\"name\":\"Release\",\"file\":\"Release.xcconfig\"}, \"Profile\",",
+                )
+            project.writeText(contents)
+            Signing(config, RecordingCommands(), emptyMap()).withProject(root, build, identity) {
+                val changed = projectJson.parseToJsonElement(project.readText()).jsonObject
+                assertEquals(
+                    projectJson.parseToJsonElement(contents).jsonObject["configurations"],
+                    changed["configurations"],
+                )
+                val settings =
+                    changed
+                        .getValue("targets")
+                        .jsonArray[0]
+                        .jsonObject
+                        .getValue("build-settings")
+                        .jsonObject
+                assertEquals("1.0", settings.string("MARKETING_VERSION[config=Profile]"))
+                assertEquals("Automatic", settings.string("CODE_SIGN_STYLE[config=Profile]"))
+            }
+            assertEquals(contents, project.readText())
         }
 
     @Test
@@ -116,8 +174,14 @@ class XcodeProjectTest {
                         )
                         .mapKeys { "${it.key}[config=Release]" }
                         .mapValues { JsonPrimitive(it.value) }
+                val oldSettings = before.getValue("build-settings").jsonObject
+                val commonKeys =
+                    setOf("CODE_SIGN_STYLE", "MARKETING_VERSION", "CURRENT_PROJECT_VERSION")
+                val preservedDebug = commonKeys.associate {
+                    "$it[config=Debug]" to oldSettings.getValue(it)
+                }
                 assertEquals(
-                    JsonObject(before.getValue("build-settings").jsonObject + expected),
+                    JsonObject((oldSettings - commonKeys) + preservedDebug + expected),
                     settings,
                 )
                 assertFalse(project.parent.resolve("project.pbxproj").exists())
