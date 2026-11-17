@@ -1,0 +1,46 @@
+{
+  // Neutral fixture for the hierarchical Xcode JSON format.
+  "default-configuration": "Release",
+  "configurations": [ "Debug", "Release", ],
+  "localizations": { "development": "en", "supported": [ "Base", ], },
+  "files": [
+    { "kind": "folder", "path": "Sources", "target-membership": [ "iosApp" ], },
+  ],
+  "packages": [ { "kind": "local", "path": "SharedKit", }, ],
+  "targets": [
+    {
+      "name": "iosApp",
+      "id": "AAA000000000000000000001",
+      "product-type": "application",
+      "build-phases": [
+        "compile-sources", "frameworks", "resources",
+        { "kind": "script", "name": "Fixture phase", "shell": "/bin/sh", "script": "echo \"https://example.invalid/a//b\"\n", },
+      ],
+      "package-product-members": [ { "package": "SharedKit", "product-name": "SharedKit", "build-phase": { "build-phase": "frameworks" }, }, ],
+      "build-settings": {
+        "CODE_SIGN_STYLE": "Automatic",
+        "CURRENT_PROJECT_VERSION": "1",
+        "MARKETING_VERSION": "1.0",
+        "CODE_SIGN_STYLE[config=Release]": "Automatic",
+        "CODE_SIGN_IDENTITY[config=Debug]": "Apple Development",
+        "PRODUCT_NAME": "$(TARGET_NAME)",
+        "PRODUCT_BUNDLE_IDENTIFIER": "org.example.iosApp",
+        "PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*][config=Debug]": "org.example.iosApp.Debug",
+        "SDKROOT": "auto",
+        "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator macosx",
+        "GENERATE_INFOPLIST_FILE": "YES",
+        "SWIFT_VERSION": "5.0",
+      },
+    },
+    {
+      "name": "Resources", "id": "BBB000000000000000000001", "product-type": "bundle",
+      "build-phases": [ "resources", ],
+      "build-settings": { "CODE_SIGN_STYLE": "Automatic", "PRODUCT_BUNDLE_IDENTIFIER": "org.example.resources", },
+    },
+  ],
+  "build-settings": {
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS[config=Debug]": "DEBUG $(inherited)",
+    "GCC_PREPROCESSOR_DEFINITIONS[config=Debug]": [ "DEBUG=1", "$(inherited)", ],
+    "SDKROOT": "auto",
+  },
+}
