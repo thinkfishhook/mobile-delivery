@@ -197,6 +197,60 @@ class SigningTest {
     }
 
     @Test
+    fun `legacy overlay restores exact bytes after success and conversion failure`() =
+        temp { root ->
+            val path = root.resolve(config.ios.project).resolve("project.pbxproj")
+            path.parent.createDirectories()
+            val original = "// legacy formatting\r\n{ original = bytes; }\r\n".toByteArray()
+            val build =
+                Build("source-sha", MarketingVersion("26.09.01"), BuildNumber("234.1"), "build-url")
+            for (failConversion in listOf(false, true)) {
+                path.writeBytes(original)
+                var called = false
+                val commands =
+                    RecordingCommands().apply {
+                        respond = { call ->
+                            when {
+                                "json" in call.args -> CommandResult(0, project().toString(), "")
+                                failConversion -> CommandResult(1, "", "conversion failed")
+                                else -> CommandResult(0, "", "")
+                            }
+                        }
+                    }
+                val action = {
+                    Signing(config, commands, emptyMap()).withProject(
+                        root,
+                        build,
+                        SigningIdentity("profile", "certificate"),
+                    ) {
+                        called = true
+                        val settings =
+                            json
+                                .parseToJsonElement(path.readText())
+                                .jsonObject
+                                .getValue("objects")
+                                .jsonObject
+                                .getValue("release")
+                                .jsonObject
+                                .getValue("buildSettings")
+                                .jsonObject
+                        assertEquals("Manual", settings.string("CODE_SIGN_STYLE"))
+                        assertEquals("certificate", settings.string("CODE_SIGN_IDENTITY"))
+                        assertEquals(config.teamId, settings.string("DEVELOPMENT_TEAM"))
+                        assertEquals("26.09.01", settings.string("MARKETING_VERSION"))
+                        assertEquals("234.1", settings.string("CURRENT_PROJECT_VERSION"))
+                        "archive result"
+                    }
+                }
+                if (failConversion) assertFailsWith<CommandError> { action() }
+                else assertEquals("archive result", action())
+                assertEquals(!failConversion, called)
+                assertContentEquals(original, path.readBytes())
+                assertEquals(listOf("json", "xml1"), commands.calls.map { it.args[2] })
+            }
+        }
+
+    @Test
     fun `compiler diagnostics distinguish deterministic source errors from infrastructure`() {
         listOf(
                 "/source/App.swift:12:4: error: cannot find value",
