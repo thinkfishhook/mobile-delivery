@@ -682,6 +682,74 @@ switch setup. Once enabled, check the first controlled release:
    gh workflow disable app-store-release.yml
    ```
 
+## Verify without delivering
+
+Use `verify` on any ref, including a throwaway branch. It checks out the caller,
+selects Xcode, installs configured Android packages, runs `verification.commands`,
+and retains configured test reports and evidence for 90 days, including on failure.
+It makes no Apple API calls, writes no receipts and never publishes a build.
+Evidence artifacts are the only uploads. No deployment switch, environment or secrets
+are needed; the caller needs only `contents: read`.
+
+```yaml
+name: Verify
+on:
+  push:
+    branches: [verification-probe]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-26
+    steps:
+      - uses: thinkfishhook/mobile-delivery/verify@<full-commit-sha>
+        env:
+          ANALYTICS_KEY: fake-probe-key
+```
+
+Replace `<full-commit-sha>` with a reviewed commit containing these actions; they
+are not available in v1.0.2. Keep `.github/delivery.json` in the caller repository.
+Bind each declared `build_environment` name through `env` on the action step.
+For throwaway probes use obviously fake, format-valid values, such as a synthetic
+UUID when a command expects a UUID. App commands must accept those values and
+must themselves be safe verification commands.
+
+To select Xcode for existing app CI commands, use `select-xcode`. It checks out
+the caller and installs the engine, then only selects Xcode; it does not run the
+app's verification commands or set up Android:
+
+```yaml
+name: App CI
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: thinkfishhook/mobile-delivery/select-xcode@<full-commit-sha>
+      - run: xcodebuild -version
+      - run: ./scripts/test.sh
+```
+
+Both actions reject caller permissions broader than `contents: read` and accept
+no inputs. They require neither a delivery concurrency queue nor an environment.
+
+### Xcode on the runner
+
+The `xcode` field in `.github/delivery.json` requires the first line of
+`xcodebuild -version` to match `Xcode <ver>` exactly. Selection prefers
+`/Applications/Xcode_<ver>.app`, then `/Applications/Xcode-<ver>.app`, then
+`/Applications/Xcode.app`. Other installed `Xcode*.app` bundles are tried in name
+order before an inherited `DEVELOPER_DIR`. Every candidate must report the exact
+configured version. The selection is exported as `DEVELOPER_DIR` for later steps.
+
+Runners with several Xcodes should install them as `/Applications/Xcode_<ver>.app`.
+Never run `xcode-select` inside jobs: it changes machine-wide state shared by jobs.
+Maintenance (including `verify-signing`) and `app-store-release` do not select Xcode;
+they use the runner's default unless the caller has already set `DEVELOPER_DIR`.
+Every simulator runtime and device named by the app's commands must be installed.
+
 ## Runner, signing and credentials
 
 Jobs run on the `runs-on` labels, except rollout controls, which run on `ubuntu-latest`

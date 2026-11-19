@@ -136,3 +136,83 @@ jobs:
           assert totals == {'build/composite-probe': {'tests': 3, 'failures': 0, 'errors': 0, 'skipped': 0}}, totals
           PY
           fi
+  public-verify:
+    runs-on: macos-26
+    timeout-minutes: 20
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare credential-free verification fixture
+        run: |
+          printf '%s' "${JAVA_HOME-__UNSET__}" > "$RUNNER_TEMP/testflight-java-home"
+          command -v java > "$RUNNER_TEMP/testflight-java-path"
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          config = json.loads(pathlib.Path('src/test/resources/delivery.json').read_text())
+          config['xcode'] = subprocess.check_output(['xcodebuild', '-version'], text=True).splitlines()[0].split()[1]
+          config['android_packages'] = []
+          config['build_environment'] = ['ANALYTICS_KEY']
+          config['verification'] = {'commands': [['python3', 'internal/engine/test-composite-environment.py']], 'test_reports': ['build/composite-probe'], 'evidence': []}
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'composite-config.json').write_text(json.dumps(config))
+          PY
+      - name: Exercise the public verify composite
+        id: probe
+        uses: ./verify
+        env:
+          DELIVERY_CONFIG: ${{ runner.temp }}/composite-config.json
+          ANALYTICS_KEY: declared-build-value
+          UNDECLARED_SENTINEL: must-not-reach-app
+      - name: Assert selection and no publication
+        env:
+          PUBLISHED: ${{ steps.probe.outputs.published }}
+        run: |
+          [[ "$PUBLISHED" == 'false' ]]
+          [[ -n "$DEVELOPER_DIR" && -d "$DEVELOPER_DIR" ]]
+          [[ "${JAVA_HOME-__UNSET__}" == "$(cat "$RUNNER_TEMP/testflight-java-home")" ]]
+          [[ "$(command -v java)" == "$(cat "$RUNNER_TEMP/testflight-java-path")" ]]
+          [[ ! -d build/delivery && ! -d build/ios ]]
+          python3 - <<'PYTEST'
+          import json, pathlib
+          totals = json.loads(pathlib.Path('build/ci-verification/tests.json').read_text())
+          assert totals == {'build/composite-probe': {'tests': 3, 'failures': 0, 'errors': 0, 'skipped': 0}}, totals
+          PYTEST
+  public-select-xcode:
+    runs-on: macos-26
+    timeout-minutes: 20
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare credential-free verification fixture
+        run: |
+          printf '%s' "${JAVA_HOME-__UNSET__}" > "$RUNNER_TEMP/testflight-java-home"
+          command -v java > "$RUNNER_TEMP/testflight-java-path"
+          python3 - <<'PY'
+          import json, os, pathlib, subprocess
+          config = json.loads(pathlib.Path('src/test/resources/delivery.json').read_text())
+          config['xcode'] = subprocess.check_output(['xcodebuild', '-version'], text=True).splitlines()[0].split()[1]
+          config['android_packages'] = []
+          config['build_environment'] = ['ANALYTICS_KEY']
+          config['verification'] = {'commands': [['python3', 'internal/engine/test-composite-environment.py']], 'test_reports': ['build/composite-probe'], 'evidence': []}
+          pathlib.Path(os.environ['RUNNER_TEMP'], 'composite-config.json').write_text(json.dumps(config))
+          PY
+      - name: Exercise the public select-xcode composite
+        id: probe
+        uses: ./select-xcode
+        env:
+          DELIVERY_CONFIG: ${{ runner.temp }}/composite-config.json
+          ANALYTICS_KEY: declared-build-value
+          UNDECLARED_SENTINEL: must-not-reach-app
+      - name: Assert selection and no publication
+        env:
+          PUBLISHED: ${{ steps.probe.outputs.published }}
+        run: |
+          [[ "$PUBLISHED" == 'false' ]]
+          [[ -n "$DEVELOPER_DIR" && -d "$DEVELOPER_DIR" ]]
+          [[ "${JAVA_HOME-__UNSET__}" == "$(cat "$RUNNER_TEMP/testflight-java-home")" ]]
+          [[ "$(command -v java)" == "$(cat "$RUNNER_TEMP/testflight-java-path")" ]]
+          [[ ! -d build/delivery && ! -d build/ios ]]
+          [[ ! -d build/ci-verification && ! -d build/composite-probe ]]

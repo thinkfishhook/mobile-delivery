@@ -23,6 +23,8 @@ tasks.test {
         ".github/workflows",
         "examples/quickstart",
         "internal",
+        "verify",
+        "select-xcode",
         "testflight",
         "maintenance",
         "app-store-release",

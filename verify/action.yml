@@ -1,0 +1,73 @@
+name: Verify without delivering
+description: Verify the app without delivering. Requires only contents read and no secrets.
+outputs:
+  published:
+    description: Always false; this action never publishes a build.
+    value: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Checkout the caller
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Compute engine cache key
+      id: engine-key
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        echo "key=$(bash "$tool_root/internal/engine/cache-key.sh" "$tool_root")" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-cache
+      with:
+        path: ${{ runner.temp }}/mobile-delivery-engine/${{ steps.engine-key.outputs.key }}
+        key: ${{ steps.engine-key.outputs.key }}
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-gradle
+      if: steps.engine-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          ~/.gradle/wrapper
+          ~/.gradle/caches
+        key: delivery-gradle-${{ steps.engine-key.outputs.key }}
+        restore-keys: delivery-gradle-mobile-delivery-${{ runner.os }}-${{ runner.arch }}-
+    - name: Install the action's engine
+      id: engine-install
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DELIVERY_ACTION_REPOSITORY: ${{ github.action_repository }}
+        DELIVERY_ACTION_SHA: ${{ github.action_ref }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        runtime="$RUNNER_TEMP/mobile-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB"
+        bash "$tool_root/internal/engine/install.sh" "$tool_root" "$runtime"
+        "$runtime/bin/mobile-delivery" configureComposite
+    - name: Select configured Xcode
+      shell: bash
+      run: mobile-delivery selectXcode
+    - name: Install Android tools when configured
+      if: steps.engine-install.outputs.android == 'true'
+      uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      with:
+        packages: platform-tools
+    - name: Prepare the configured Android SDK
+      if: steps.engine-install.outputs.android == 'true'
+      shell: bash
+      run: mobile-delivery setupAndroid
+    - name: Verify the app
+      shell: bash
+      run: mobile-delivery verify
+    - name: Retain configured verification evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ios-verification-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          build/ci-verification
+          build/delivery
+        retention-days: 90
+        if-no-files-found: warn

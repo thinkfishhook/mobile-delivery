@@ -3,6 +3,14 @@
 All notable changes are documented here in the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 format. Releases use [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Public `verify` and `select-xcode` composite actions with read-only caller permissions
+  and no credential inputs, plus policy checks and credential-free composite self-tests.
+- Verification-only workflow examples and the runner Xcode selection contract.
+
 ## [1.0.2] - 2026-11-04
 
 ### Fixed

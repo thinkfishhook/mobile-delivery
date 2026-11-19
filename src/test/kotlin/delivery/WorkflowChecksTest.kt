@@ -8,7 +8,14 @@ import org.yaml.snakeyaml.Yaml
 
 class WorkflowChecksTest {
     private val composites =
-        listOf("testflight", "maintenance", "app-store-release", "app-store-rollout")
+        listOf(
+            "verify",
+            "select-xcode",
+            "testflight",
+            "maintenance",
+            "app-store-release",
+            "app-store-rollout",
+        )
 
     private fun copyComposites(root: Path) {
         val repository = Path.of(System.getProperty("delivery.root"))
@@ -56,6 +63,38 @@ class WorkflowChecksTest {
                             CompositeChecks().validate(root, listOf(action))
                         }
                     assertContains(failure.message.orEmpty(), phase)
+                }
+                path.writeText(original)
+            }
+        }
+
+    @Test
+    fun `read-only composites reject delivery phases secrets missing selection and lost evidence`() =
+        temp { root ->
+            copyComposites(root)
+            for (action in listOf("verify", "select-xcode")) {
+                val path = root.resolve("$action/action.yml")
+                val original = path.readText()
+                CompositeChecks().validate(root, listOf(action))
+                val mutations =
+                    listOf(
+                        original.replace("runs:", "inputs: { secret: { required: true } }\nruns:"),
+                        original.replace(
+                            "run: mobile-delivery selectXcode",
+                            "run: mobile-delivery uploadBeta",
+                        ),
+                        original.replace(
+                            "run: mobile-delivery selectXcode",
+                            "run: mobile-delivery selectXcode\n      env: { GH_TOKEN: \${{ github.token }} }",
+                        ),
+                        original + "    - shell: bash\n      run: mobile-delivery gate\n",
+                    ) +
+                        if (action == "verify")
+                            listOf(original.replace("if: always()", "if: success()"))
+                        else emptyList()
+                for (changed in mutations) {
+                    path.writeText(changed)
+                    assertFails { CompositeChecks().validate(root, listOf(action)) }
                 }
                 path.writeText(original)
             }

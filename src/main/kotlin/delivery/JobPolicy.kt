@@ -9,6 +9,8 @@ private val callerPermissions =
         "maintenance" to
             linkedMapOf("contents" to "read", "actions" to "read", "issues" to "write"),
         "release" to linkedMapOf("contents" to "read", "actions" to "read", "issues" to "read"),
+        "verify" to linkedMapOf("contents" to "read"),
+        "select-xcode" to linkedMapOf("contents" to "read"),
         "rollout" to linkedMapOf("contents" to "read"),
     )
 
@@ -37,9 +39,10 @@ class JobPolicy(private val env: Map<String, String>) {
         val lock = "concurrency: { group: $group, queue: max, cancel-in-progress: false }"
         val concurrency = job["concurrency"] as? Map<*, *>
         require(
-            concurrency?.get("group") == group &&
-                concurrency["queue"] == "max" &&
-                concurrency["cancel-in-progress"] == false
+            mode in setOf("verify", "select-xcode") ||
+                (concurrency?.get("group") == group &&
+                    concurrency["queue"] == "max" &&
+                    concurrency["cancel-in-progress"] == false)
         ) {
             "$caller: the delivery run lock is missing or unsafe. Add:\n    $lock"
         }

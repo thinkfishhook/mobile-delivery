@@ -7,6 +7,8 @@ import kotlinx.serialization.json.*
 internal class CompositeChecks {
     private val operationPhases =
         mapOf(
+            "verify" to listOf("selectXcode", "setupAndroid", "verify"),
+            "select-xcode" to listOf("selectXcode"),
             "testflight" to
                 listOf(
                     "selectXcode",
@@ -72,12 +74,54 @@ internal class CompositeChecks {
                     "$file: expected one $id engine step"
                 }
             }
-            require(engine == null || engine == installed) {
+            val readOnly = action in setOf("verify", "select-xcode")
+            val comparable = installed.map { step ->
+                if (step["id"] != "engine-install") step
+                else
+                    step +
+                        ("env" to
+                            yamlMapping(step["env"]).filterKeys {
+                                it !in
+                                    setOf(
+                                        "DELIVERY_ACTION_BRANCH",
+                                        "DELIVERY_ACTION_INPUTS",
+                                        "IOS_DELIVERY_ENABLED",
+                                        "IOS_APPSTORE_ENABLED",
+                                    )
+                            })
+            }
+            require(engine == null || engine == comparable) {
                 "$file: engine cache and installation steps must match every composite"
             }
-            engine = installed
+            engine = comparable
             require(installed.map(steps::indexOf).zipWithNext().all { (a, b) -> a < b }) {
                 "$file: engine cache must precede installation"
+            }
+            if (readOnly) {
+                require(document["inputs"] == null || yamlMapping(document["inputs"]).isEmpty()) {
+                    "$file: no inputs or secrets allowed"
+                }
+                require(steps.mapNotNull(::phase) == operationPhases.getValue(action)) {
+                    "$file: only the ordered read-only phases ${operationPhases.getValue(action)} are allowed"
+                }
+                require(
+                    steps.indexOf(installed.last()) <
+                        steps.indexOfFirst { phase(it) == "selectXcode" }
+                ) {
+                    "$file: install before selecting Xcode"
+                }
+                steps.forEach { validateStep(file, it) }
+                require(
+                    !githubCredential(steps.toString()) &&
+                        credentialReferences(steps.toString()).isEmpty()
+                ) {
+                    "$file: no credentials allowed"
+                }
+                if (action == "verify")
+                    require(steps.any { artifact(it) && it["if"] == "always()" }) {
+                        "$file: always retain verification evidence"
+                    }
+                continue
             }
             val required =
                 listOf("gate", "jobPolicy", "validate", "installAsc", "compositeSummary") +
@@ -155,6 +199,8 @@ internal class CompositeChecks {
     fun validateCaller(root: Path, file: String, job: String, action: String) {
         val mode =
             mapOf(
+                    "verify" to "verify",
+                    "select-xcode" to "select-xcode",
                     "testflight" to "delivery",
                     "maintenance" to "maintenance",
                     "app-store-release" to "release",
