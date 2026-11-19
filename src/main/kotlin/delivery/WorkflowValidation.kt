@@ -33,6 +33,8 @@ internal fun workflowProblems(
         }
     val operation =
         when (env["DELIVERY_VALIDATION_MODE"]) {
+            "verify" -> "verify"
+            "select-xcode" -> "selectXcode"
             "delivery" -> "startRun"
             "release" -> "appStoreRelease"
             "rollout" -> "rolloutControl"
@@ -68,7 +70,11 @@ internal fun workflowProblems(
             problems +=
                 "repository or environment variable $key must be exactly \"true\" or \"false\""
     }
-    if ((operation in toolModes || mode == "validate") && inputs.branch.isNullOrBlank())
+    if (
+        (operation in toolModes ||
+            (mode == "validate" && operation !in setOf("verify", "selectXcode"))) &&
+            inputs.branch.isNullOrBlank()
+    )
         problems += "caller with: branch is missing"
     if (mode == "validate") {
         problems += inputProblems(operation, inputs, env)

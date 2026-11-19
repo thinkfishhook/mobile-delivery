@@ -57,6 +57,39 @@ class JobPolicyTest {
     }
 
     @Test
+    fun `read-only actions need no queue and reject missing or broader permissions`() =
+        temp { root ->
+            for (mode in listOf("verify", "select-xcode")) {
+                assertEquals(
+                    "",
+                    run(root, concurrency = "", permissions = "{ contents: read }", mode = mode),
+                )
+                assertEquals(
+                    "",
+                    run(
+                        root,
+                        concurrency = "",
+                        permissions = "",
+                        mode = mode,
+                        workflowPermissions = "permissions: { contents: read }",
+                    ),
+                )
+                for (permissions in
+                    listOf(
+                        "{}",
+                        "{ contents: write }",
+                        "{ contents: read, actions: write }",
+                        "read-all",
+                        "write-all",
+                    )) {
+                    assertFailsWith<IllegalArgumentException> {
+                        run(root, concurrency = "", permissions = permissions, mode = mode)
+                    }
+                }
+            }
+        }
+
+    @Test
     fun `TestFlight actions read is rejected with actions write correction`() = temp { root ->
         val failure =
             assertFailsWith<IllegalArgumentException> {

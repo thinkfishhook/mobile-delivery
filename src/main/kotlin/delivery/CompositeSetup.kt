@@ -13,7 +13,21 @@ internal fun writeEnvironment(values: Map<String, String>, output: Path) {
     }
 }
 
-internal fun configureComposite(env: Map<String, String>) {
+internal fun configureComposite(env: Map<String, String>, root: Path = Path.of(".")) {
+    val name = Path.of(env.getValue("ACTION_PATH")).fileName.toString()
+    if (name in setOf("verify", "select-xcode")) {
+        JobPolicy(env + ("DELIVERY_VALIDATION_MODE" to name)).validate(root)
+        writeEnvironment(
+            mapOf("DELIVERY_VALIDATION_MODE" to name, "DELIVERY_COMPOSITE" to "true"),
+            Path.of(env.getValue("GITHUB_ENV")),
+        )
+        if (name == "verify") {
+            val config = DeliveryConfig.load(root, env, "verify")
+            Path.of(env.getValue("GITHUB_OUTPUT"))
+                .appendText("android=${config.androidPackages.isNotEmpty()}\n")
+        }
+        return
+    }
     val dispatch =
         try {
             workflowInputs(mapOf("DELIVERY_INPUTS" to env.getValue("DELIVERY_ACTION_INPUTS")))
@@ -23,7 +37,6 @@ internal fun configureComposite(env: Map<String, String>) {
                 "dispatch must be a JSON object with the documented operation input types; pass toJSON(inputs)"
             )
         }
-    val name = Path.of(env.getValue("ACTION_PATH")).fileName.toString()
     val mode =
         requireNotNull(
             mapOf(

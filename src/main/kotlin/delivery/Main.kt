@@ -27,7 +27,7 @@ internal fun runTask(
     val mode = args.firstOrNull() ?: error("Specify a delivery task")
     when (mode) {
         "configureComposite" -> {
-            configureComposite(env)
+            configureComposite(env, root)
             return
         }
         "compositeSummary" -> {

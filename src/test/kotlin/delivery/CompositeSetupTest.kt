@@ -6,6 +6,49 @@ import org.junit.Test
 
 class CompositeSetupTest {
     @Test
+    fun `read-only setup requires no branch dispatch switches or credentials`() = temp { root ->
+        root
+            .resolve(".github/workflows")
+            .createDirectories()
+            .resolve("probe.yml")
+            .writeText(
+                """
+                permissions: { contents: read }
+                jobs:
+                  probe:
+                    runs-on: macos-26
+                """
+                    .trimIndent()
+            )
+        val fixture =
+            java.nio.file.Path.of(System.getProperty("delivery.root"))
+                .resolve("src/test/resources/delivery.json")
+        fixture.copyTo(root.resolve("delivery.json"))
+        for (action in listOf("verify", "select-xcode")) {
+            val output = root.resolve("$action-env").createFile()
+            val stepOutput = root.resolve("$action-output").createFile()
+            val env =
+                mapOf(
+                    "ACTION_PATH" to "/tool/$action",
+                    "GITHUB_ENV" to output.toString(),
+                    "GITHUB_OUTPUT" to stepOutput.toString(),
+                    "GITHUB_WORKFLOW_REF" to
+                        "owner/repo/.github/workflows/probe.yml@refs/heads/probe",
+                    "GITHUB_JOB" to "probe",
+                    "DELIVERY_CONFIG" to root.resolve("delivery.json").toString(),
+                )
+            runTask(arrayOf("configureComposite"), root, env, RecordingCommands())
+            assertContains(output.readText(), action)
+            assertEquals(
+                emptyList(),
+                workflowProblems("validate", mapOf("DELIVERY_VALIDATION_MODE" to action)),
+            )
+            if (action == "verify") assertContains(stepOutput.readText(), "android=true")
+            else assertEquals("", stepOutput.readText())
+        }
+    }
+
+    @Test
     fun `scheduled maintenance always sweeps while manual dispatch preserves its operation`() =
         temp { root ->
             for ((event, operation) in

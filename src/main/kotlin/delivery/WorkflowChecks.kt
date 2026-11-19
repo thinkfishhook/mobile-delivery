@@ -18,6 +18,8 @@ class WorkflowChecks {
                         val localComposite =
                             action in
                                 setOf(
+                                    "./verify",
+                                    "./select-xcode",
                                     "./testflight",
                                     "./maintenance",
                                     "./app-store-release",
