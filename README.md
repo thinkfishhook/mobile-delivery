@@ -10,13 +10,9 @@ failures never gate deployment. Local pre-push risk review composes existing hoo
 
 ## Quick start
 
-The reporter permission correction for v1.1.1 is being prepared. Candidate templates
-pin reviewed implementation `2d03ee4e318219a69ef1a8899a8d064138779b58` with Checks read; stable publication will replace
-that candidate pin with the immutable patch release SHA. The v1.1.0 pin below identifies
-the previous baseline, whose caller validator rejects the corrected permission set.
-
-The previous baseline is stable [v1.1.0](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.0),
-`d0b62a1a9b8e3f531c0ffbb97629a452cffc0268`. Start with
+The copy-in examples pin stable [v1.1.1](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.1),
+`1050b2bf67c2e22289ee7452cf12bf089b6699ba`. This patch corrects reporter Checks-read
+permissions and Codex's immutable-source tool transport. Start with
 `IOS_DELIVERY_ENABLED=false` and `IOS_APPSTORE_ENABLED=false`. CI still verifies and retains
 evidence, without preparing or uploading a package. Follow the
 [upgrade and acceptance guide](docs/upgrade-v1.1.md) for existing apps.

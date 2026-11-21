@@ -9,7 +9,7 @@ cp -R /path/to/mobile-delivery/examples/quickstart/. /path/to/app/
 Review existing files first: copying can replace workflows, a delivery configuration or
 Dependabot rules with the same names. Merge any existing rules you need to retain.
 Repository secrets and switches are set separately by the main README's Quick start.
-This retained all-in-one shape pins stable v1.1.0 at `d0b62a1a9b8e3f531c0ffbb97629a452cffc0268`.
+This retained all-in-one shape pins stable v1.1.1 at `1050b2bf67c2e22289ee7452cf12bf089b6699ba`.
 Keep deployment disabled until your verification run succeeds.
 
 Every app-specific edit is marked `# CHANGE ME`. In YAML these are comments. JSON does

@@ -9,8 +9,7 @@ cp -R /path/to/mobile-delivery/examples/quickstart/. /path/to/app/
 Review existing files first: copying can replace workflows, a delivery configuration or
 Dependabot rules with the same names. Merge any existing rules you need to retain.
 Repository secrets and switches are set separately by the main README's Quick start.
-The candidate shared actions pin the reviewed v1.1.1 permission correction; replace that
-implementation pin with the immutable stable patch SHA after publication.
+The shared actions pin stable v1.1.1 at `1050b2bf67c2e22289ee7452cf12bf089b6699ba`.
 Keep deployment disabled until your verification run succeeds.
 
 Every app-specific edit is marked `# CHANGE ME`. In YAML these are comments. JSON does
@@ -66,6 +65,5 @@ repository provider secret. Run `mobile-delivery callerChecks` from the app chec
 See `docs/upgrade-v1.1.md` in the tool for the packaged local hook, safe rollback and exact
 live acceptance evidence; copying files alone does not establish a successful deployment.
 
-The reviewed candidate includes the required Checks-read grant. Do not substitute the
-previous v1.1.0 validator, which rejects this corrected permission set. Stable publication
-refreshes every candidate pin together.
+The v1.1.1 reporter requires Checks read. Use the matching v1.1.1 CLI; the previous
+v1.1.0 validator rejects this corrected permission set.

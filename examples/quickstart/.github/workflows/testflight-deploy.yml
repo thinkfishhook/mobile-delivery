@@ -14,7 +14,7 @@ jobs:
     permissions: { contents: write, actions: read, issues: write }
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/testflight-deploy@2d03ee4e318219a69ef1a8899a8d064138779b58 # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
+      - uses: thinkfishhook/mobile-delivery/testflight-deploy@1050b2bf67c2e22289ee7452cf12bf089b6699ba # v1.1.1
         with:
           branch: main
           ci-workflow: ci.yml
@@ -34,7 +34,7 @@ jobs:
     permissions: { contents: read, actions: read, checks: read, issues: write }
     concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/report-failure@2d03ee4e318219a69ef1a8899a8d064138779b58 # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
+      - uses: thinkfishhook/mobile-delivery/report-failure@1050b2bf67c2e22289ee7452cf12bf089b6699ba # v1.1.1
         with:
           role: deploy
           operation-job: deploy
