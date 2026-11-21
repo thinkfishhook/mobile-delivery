@@ -13,7 +13,7 @@ function fixture(){
 const finding=(priority='P2',side='RIGHT')=>({id:22,user,commit_id:after,original_commit_id:after,pull_request_review_id:11,path:'src/store.kt',line:5,side,html_url:'https://github.com/owner/repo/pull/3#discussion_r22',body:`**<sub><sub>![${priority} Badge](https://img.shields.io/badge/${priority}-yellow?style=flat)</sub></sub>  Preserve saved records**\n\nOld readers lose saved records when this path overwrites them. Keep a compatible reader.\n\nUseful? React with 👍 / 👎.\n\n<!-- codex-code-review-finding:v1 -->`});
 test('only exact completed trusted native state establishes a clean review',async()=>{
  const f=fixture(),r=await connectorEvidence(f.input);assert.equal(r.complete,true);assert.deepEqual(r.findings,[]);assert.equal(r.model,'connector-managed');
- for(const changes of [{status:'running'},{commit_sha:before},{has_any_findings:null}]){f.comments=[summary(state(changes))];await assert.rejects(connectorEvidence(f.input),/incomplete|exact|completed/);}
+ for(const changes of [{status:'running'},{commit_sha:before},{has_any_findings:null},{has_unresolved_findings:true}]){f.comments=[summary(state(changes))];await assert.rejects(connectorEvidence(f.input),/incomplete|exact|completed/);}
  f.comments=[];await assert.rejects(connectorEvidence(f.input),/incomplete/);
 });
 test('human copied markers and lookalike bot identities cannot assert completion',async()=>{

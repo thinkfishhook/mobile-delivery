@@ -21,6 +21,7 @@ function nativeState(comments,after){
  let state;try{state=JSON.parse(matches[0][1]).code_review;}catch{throw Error('Native review metadata is malformed/incomplete');}
  check(state?.commit_sha===after,'Native review does not cover the exact requested source');
  check(state.status==='completed'&&typeof state.has_any_findings==='boolean'&&typeof state.has_unresolved_findings==='boolean','Native review is incomplete, not completed');
+ check(state.has_any_findings||!state.has_unresolved_findings,'Native review metadata is contradictory/incomplete');
  return state;
 }
 export async function connectorEvidence({api,number,before,after,base,head}){
