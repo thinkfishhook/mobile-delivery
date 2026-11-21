@@ -11,6 +11,8 @@ upload and support manual branch delivery. See the [split delivery contract](doc
 for event, credential, recovery and migration boundaries.
 Split callers also use the independent [failure reporter](docs/failure-reporting.md),
 which records early setup failures without depending on the delivery engine.
+The shared [local risk review](docs/local-risk-review.md) composes existing pre-push hooks
+and reviews exact outgoing refs with Claude or Codex before a push.
 
 ## Quick start
 

@@ -90,3 +90,11 @@ val reporterTests =
     }
 
 tasks.check { dependsOn(reporterTests) }
+
+val reviewTests =
+    tasks.register<Exec>("reviewTests") {
+        group = "verification"
+        commandLine("node", "--test", "internal/test-review.mjs")
+    }
+
+tasks.check { dependsOn(reviewTests) }

@@ -1,0 +1,38 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["schema", "complete", "summary", "findings"],
+  "properties": {
+    "schema": { "type": "integer", "enum": [1] },
+    "complete": { "type": "boolean" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "findings": {
+      "type": "array", "maxItems": 50,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["priority", "title", "path", "line", "anchor", "evidence", "impact", "correction", "risk"],
+        "properties": {
+          "priority": { "type": "string", "enum": ["P0", "P1", "P2", "P3"] },
+          "title": { "type": "string", "minLength": 1, "maxLength": 180 },
+          "path": { "type": "string", "minLength": 1, "maxLength": 500 },
+          "line": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+          "anchor": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "impact": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "correction": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "risk": {
+            "type": "object", "additionalProperties": false,
+            "required": ["blocksPush", "categories", "affectedSurface", "reversibility", "mitigation", "reason"],
+            "properties": {
+              "blocksPush": { "type": "boolean" },
+              "categories": { "type": "array", "maxItems": 6, "items": { "type": "string", "enum": ["destructive-data-schema", "external-effects", "storage-api-protocol", "credentials-access-signing", "production-routing", "broad-shared-behavior"] } },
+              "affectedSurface": { "type": "string", "minLength": 1, "maxLength": 1000 },
+              "reversibility": { "type": "string", "enum": ["reversible", "irreversible", "unknown"] },
+              "mitigation": { "type": "string", "minLength": 1, "maxLength": 1500 },
+              "reason": { "type": "string", "minLength": 1, "maxLength": 1500 }
+            }
+          }
+        }
+      }
+    }
+  }
+}
