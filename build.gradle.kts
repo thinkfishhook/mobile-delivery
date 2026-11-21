@@ -46,6 +46,14 @@ val workflowChecks =
 
 tasks.check { dependsOn(workflowChecks) }
 
+// Explicit local probe: requires macOS and Xcode 27.2+, performs no archive/signing/GUI work.
+tasks.register<JavaExec>("checkXcodeProjectFormat") {
+    group = "verification"
+    dependsOn(tasks.testClasses)
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass.set("delivery.XcodeProjectProbe")
+}
+
 // Boundary and state-machine rules focus on correctness.
 detekt {
     source.setFrom(files("src/main/kotlin"))
