@@ -130,6 +130,7 @@ val connectorRequestTests =
             "--test",
             "internal/test-connector-request.mjs",
             "internal/test-connector-evidence.mjs",
+            "internal/test-connector-plan.mjs",
         )
     }
 
