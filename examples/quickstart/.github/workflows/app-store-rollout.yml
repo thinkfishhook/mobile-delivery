@@ -19,7 +19,7 @@ jobs:
     concurrency: { group: ios-rollout, queue: max, cancel-in-progress: false }
     permissions: { contents: read }
     steps:
-      - uses: thinkfishhook/mobile-delivery/app-store-rollout@7366be5a1158e54da925a79caab3dec5fda6df11 # reviewed implementation candidate; replace with stable v1.1.0 SHA after release
+      - uses: thinkfishhook/mobile-delivery/app-store-rollout@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0
         with:
           branch: main # CHANGE ME: same delivery branch
           dispatch: ${{ toJSON(inputs) }}

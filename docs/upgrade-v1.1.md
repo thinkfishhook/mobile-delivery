@@ -3,9 +3,10 @@
 v1.1.0 is an additive minor release. The existing all-in-one `testflight`, maintenance,
 release, rollout, schema-1 package and receipt readers remain supported. New CI and
 standalone deployment reserve schema-2 package identities. Private app evidence belongs
-in each app's migration ticket. Copy-in examples on an unreleased candidate explicitly
-identify their implementation pin; after publication use the full commit SHA reported by
-the immutable v1.1.0 release, consistently for every shared action.
+in each app's migration ticket. Stable [v1.1.0](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.0) is
+`d0b62a1a9b8e3f531c0ffbb97629a452cffc0268`. Use this full SHA consistently for every
+shared action. The tagged source retains explicitly labelled implementation-candidate
+examples; the updated trunk examples pin the actual stable release commit.
 
 ## Prepare and integrate
 

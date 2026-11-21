@@ -10,8 +10,8 @@ failures never gate deployment. Local pre-push risk review composes existing hoo
 
 ## Quick start
 
-The v1.1 examples currently identify their reviewed implementation candidate explicitly;
-replace that pin with the immutable stable v1.1.0 full SHA after publication. Start with
+The copy-in examples pin stable [v1.1.0](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.0),
+`d0b62a1a9b8e3f531c0ffbb97629a452cffc0268`. Start with
 `IOS_DELIVERY_ENABLED=false` and `IOS_APPSTORE_ENABLED=false`. CI still verifies and retains
 evidence, without preparing or uploading a package. Follow the
 [upgrade and acceptance guide](docs/upgrade-v1.1.md) for existing apps.
