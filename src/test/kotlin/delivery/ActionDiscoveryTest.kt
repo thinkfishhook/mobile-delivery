@@ -10,6 +10,8 @@ class ActionDiscoveryTest {
     fun `composite callers resolve every role with version tags and exact SHAs`() {
         val roles =
             mapOf(
+                "ci" to "ci",
+                "testflight-deploy" to "testflight-deploy",
                 "testflight" to "testflight",
                 "maintenance" to "maintenance",
                 "app-store-release" to "app-store-release",

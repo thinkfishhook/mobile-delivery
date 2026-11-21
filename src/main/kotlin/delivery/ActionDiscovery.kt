@@ -6,6 +6,8 @@ import kotlinx.serialization.json.*
 internal fun actionWorkflowRoles(text: String, repository: String): Set<String> {
     val compositeRoles =
         mapOf(
+            "ci" to "ci",
+            "testflight-deploy" to "testflight-deploy",
             "testflight" to "testflight",
             "maintenance" to "maintenance",
             "app-store-release" to "app-store-release",
