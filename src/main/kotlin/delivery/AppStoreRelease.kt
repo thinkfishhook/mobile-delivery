@@ -286,8 +286,10 @@ class AppStoreRelease(
             )
         }
         val tag = "submit/appstore/$version/${build.number}"
-        val receipt = storeReceipt(sha, version, build.number, build.id, versionId)
-        val repair = attemptEffect { tags.write(tag, sha, receipt) }.exceptionOrNull()
+        val repair = attemptEffect {
+            tags.write(tag, sha, storeReceipt(sha, version, build.number, build.id, versionId))
+        }
+            .exceptionOrNull()
         if (!request.scheduled)
             println(
                 "Critical fix? Request an expedited review in App Store Connect; this tool never does."

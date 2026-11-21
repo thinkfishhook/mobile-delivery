@@ -268,7 +268,10 @@ class FakeTags : ReceiptTags {
 
     override fun names(prefix: String) = tags.keys.filter { it.startsWith(prefix) }.toSet()
 
-    override fun read(tag: String) = tags[tag]?.second
+    override fun read(tag: String): Receipt? {
+        if (failReads) throw CommandError("Receipt read failed")
+        return tags[tag]?.second
+    }
 
     override fun commit(tag: String): String {
         commitReads++

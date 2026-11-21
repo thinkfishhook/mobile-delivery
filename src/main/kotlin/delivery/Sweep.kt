@@ -59,7 +59,15 @@ class Sweep(
         findings += repairReceipts(facts, repaired)
         if (audit) findings += auditReceipts(facts.receipts)
         val tipTraces = beta.traces(tip, facts.copy(receipts = facts.receipts + repaired))
-        findings += tipStatus(tip, tipTraces)
+        val reserved = reservedTip(tip, facts, facts.receipts + repaired)
+        findings +=
+            if (reserved == null) tipStatus(tip, tipTraces)
+            else
+                SweepFinding(
+                    IncidentSubject.BetaCommit(tip),
+                    if (reserved.first.request.origin == PackageOrigin.CI_VERIFIED) "delivered"
+                    else "manually delivered; verification not inferred",
+                )
         findings +=
             try {
                 appStore.sweep()
@@ -81,7 +89,9 @@ class Sweep(
             incidents.sync(findings, tip) { key ->
                 checked(key, audit, appStoreRead, facts.builds, receipts)
             }
-            tipTraces.latest?.takeIf { it.receiptTarget == tip }?.let { onDelivered(tip, it) }
+            if (reserved?.first?.request?.origin == PackageOrigin.CI_VERIFIED)
+                onDelivered(tip, reserved.second)
+            else tipTraces.latest?.takeIf { it.receiptTarget == tip }?.let { onDelivered(tip, it) }
         } catch (error: Exception) {
             findings +=
                 SweepFinding(
@@ -91,6 +101,46 @@ class Sweep(
                 )
         }
         return SweepReport(findings)
+    }
+
+    private fun reservedTip(
+        tip: String,
+        facts: BetaFacts,
+        receipts: Set<String>,
+    ): Pair<Preparation, Trace>? {
+        if (receipts.none { BuildNumber(it.substringAfterLast('/')).legacyCount == null })
+            return null
+        val matching =
+            preparationRecords
+                .filter { record ->
+                    val p = record.preparation
+                    record.manifest != null &&
+                        p.request.sha == tip &&
+                        p.request.bundleId == config.bundleId &&
+                        "deploy/testflight/${p.version}/${p.number}" in receipts
+                }
+                .sortedWith(
+                    compareByDescending<PreparationRecord> {
+                            it.preparation.request.origin == PackageOrigin.CI_VERIFIED
+                        }
+                        .thenByDescending { appleBuildOrder(it.preparation.number.value) }
+                )
+        return matching.firstOrNull()?.preparation?.let { p ->
+            val tag = "deploy/testflight/${p.version}/${p.number}"
+            require(tags.commit(tag) == tip && tags.read(tag)?.preparation == p) {
+                "Reserved receipt differs from its sealed source provenance"
+            }
+            p to
+                Trace(
+                    p.number,
+                    p.version.value,
+                    tip,
+                    null,
+                    facts.builds.find {
+                        it.number == p.number.value && it.version == p.version.value
+                    },
+                )
+        }
     }
 
     // Whether this sweep looked closely enough at an incident's subject to close it. Absence from

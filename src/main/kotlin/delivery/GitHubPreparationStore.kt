@@ -23,13 +23,25 @@ class GitHubPreparationStore(private val github: GitHub) : PreparationStore {
         val target = ref.getValue("object").jsonObject
         require(target.string("type") == "commit") { "Preparation ledger ref is not a commit" }
         val revision = target.string("sha")
-        val file = github.api("contents/reservations.json?ref=$revision")!!.jsonObject
-        require(file.string("type") == "file" && file.string("encoding") == "base64") {
-            "Expected preparation ledger file"
+        val commit = github.api("git/commits/$revision")!!.jsonObject
+        val tree =
+            github.api("git/trees/${commit.getValue("tree").jsonObject.string("sha")}")!!.jsonObject
+        val file =
+            tree
+                .getValue("tree")
+                .jsonArray
+                .map { it.jsonObject }
+                .single { it.string("path") == "reservations.json" }
+        require(file.string("type") == "blob" && file.string("mode") == "100644") {
+            "Expected a regular preparation ledger file"
+        }
+        val blob = github.api("git/blobs/${file.string("sha")}")!!.jsonObject
+        require(blob.string("sha") == file.string("sha") && blob.string("encoding") == "base64") {
+            "Preparation blob differs from the observed ledger revision"
         }
         val ledger =
             json.decodeFromString<PreparationLedger>(
-                Base64.getMimeDecoder().decode(file.string("content")).decodeToString()
+                Base64.getMimeDecoder().decode(blob.string("content")).decodeToString()
             )
         return PreparationSnapshot(revision, ledger.records)
     }

@@ -57,6 +57,9 @@ the fast-forward race and retry from the winner. Initialization races use create
 exclusivity. Lost write responses are read back before any retry; authentication/other failures
 are not silently treated as successful reservations.
 
+Reads follow that immutable revision's commit, tree and blob. This avoids the Contents API's
+size-dependent base64 representation and preserves the complete durable ledger as it grows.
+
 Keep this branch durable: do not delete, rewrite or treat it as an app integration branch.
 It holds minimal identity/manifest metadata, not IPA bytes, archives, source copies or secrets.
 The writer needs repository `contents: write` with the job token. It does not use receipt,

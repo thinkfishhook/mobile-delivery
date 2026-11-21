@@ -5,6 +5,53 @@ import org.junit.Test
 
 class PreparationCompatibilityTest {
     @Test
+    fun `repaired reserved CI receipt reports delivered and invokes the correct callback`() =
+        temp { output ->
+            val world = World(output)
+            val p = preparation(PackageOrigin.CI_VERIFIED)
+            world.source.shas = listOf(p.request.sha)
+            world.apple.builds +=
+                TestFlightBuild("ci", p.version.value, p.number.value, "VALID", false)
+            world.apple.testers += "ci"
+            val delivered = mutableListOf<String>()
+            val release =
+                AppStoreRelease(
+                    config,
+                    world.apple,
+                    world.tags,
+                    world.source,
+                    world.symbols(),
+                    world.env("release"),
+                    clock,
+                )
+            val sweep =
+                Sweep(
+                    config,
+                    world.beta(),
+                    release,
+                    world.apple,
+                    world.tags,
+                    world.source,
+                    world.incidents,
+                    { false },
+                    onDelivered = { sha, _ -> delivered += sha },
+                    preparations = { listOf(PreparationRecord(p, preparedManifest(p))) },
+                )
+            val report = sweep.run(p.request.sha)
+            assertEquals(
+                "delivered",
+                report.findings
+                    .last { it.operationKey == IncidentSubject.BetaCommit(p.request.sha) }
+                    .outcome,
+            )
+            assertEquals(listOf(p.request.sha), delivered)
+            assertTrue(
+                world.beta().traces(p.request.sha).traces.isEmpty(),
+                "Legacy upload planning must remain separate",
+            )
+        }
+
+    @Test
     fun `CI provenance for another app or repository cannot qualify an App Store candidate`() =
         temp { output ->
             val world = World(output)

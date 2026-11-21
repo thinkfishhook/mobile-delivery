@@ -31,12 +31,32 @@ private class ReservationRepository {
                                 }
                             }
                         )
-                body == null && path.startsWith("contents/") -> {
-                    val content =
-                        trees.getValue(commits.getValue(path.substringAfter("ref=")).first)
+                body == null && path.startsWith("git/commits/") ->
                     ok(
                         buildJsonObject {
-                            put("type", "file")
+                            putJsonObject("tree") {
+                                put("sha", commits.getValue(path.substringAfterLast('/')).first)
+                            }
+                        }
+                    )
+                body == null && path.startsWith("git/trees/") ->
+                    ok(
+                        buildJsonObject {
+                            putJsonArray("tree") {
+                                addJsonObject {
+                                    put("path", "reservations.json")
+                                    put("type", "blob")
+                                    put("mode", "100644")
+                                    put("sha", path.substringAfterLast('/'))
+                                }
+                            }
+                        }
+                    )
+                body == null && path.startsWith("git/blobs/") -> {
+                    val content = trees.getValue(path.substringAfterLast('/'))
+                    ok(
+                        buildJsonObject {
+                            put("sha", path.substringAfterLast('/'))
                             put("encoding", "base64")
                             put(
                                 "content",
@@ -103,6 +123,31 @@ private class ReservationRepository {
 }
 
 class GitHubPreparationStoreTest {
+    @Test
+    fun `large ledger uses immutable blob instead of size-limited Contents representation`() {
+        val commands = RecordingCommands()
+        val revision = "a".repeat(40)
+        val blob = "b".repeat(40)
+        val p =
+            Preparation(preparationRequest(), MarketingVersion("26.11.01"), BuildNumber("234.1.1"))
+        val content =
+            " ".repeat(1_048_577) +
+                """{"schema":1,"records":[${json.encodeToString(PreparationRecord.serializer(), PreparationRecord(p))}]}"""
+        commands.response("""{"object":{"type":"commit","sha":"$revision"}}""")
+        commands.response("""{"tree":{"sha":"tree"}}""")
+        commands.response(
+            """{"tree":[{"path":"reservations.json","type":"blob","mode":"100644","sha":"$blob"}]}"""
+        )
+        commands.response(
+            """{"sha":"$blob","encoding":"base64","content":"${Base64.getEncoder().encodeToString(content.toByteArray())}"}"""
+        )
+        val state = GitHubPreparationStore(GitHub("owner/repo", commands, emptyMap())).read()
+        assertEquals(revision, state.revision)
+        assertEquals(listOf(PreparationRecord(p)), state.records)
+        assertEquals("repos/owner/repo/git/blobs/$blob", commands.calls.last().args[2])
+        assertTrue(commands.calls.none { "contents/" in it.args[2] })
+    }
+
     @Test
     fun `allocation floor includes historical receipts expired packages and every Apple state`() {
         val apple = FakeApple()
