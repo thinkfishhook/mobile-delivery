@@ -25,6 +25,8 @@ tasks.test {
         "internal",
         "verify",
         "select-xcode",
+        "ci",
+        "testflight-deploy",
         "testflight",
         "maintenance",
         "app-store-release",

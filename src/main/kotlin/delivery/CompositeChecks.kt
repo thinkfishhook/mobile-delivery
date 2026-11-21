@@ -201,6 +201,8 @@ internal class CompositeChecks {
             mapOf(
                     "verify" to "verify",
                     "select-xcode" to "select-xcode",
+                    "ci" to "ci",
+                    "testflight-deploy" to "deploy",
                     "testflight" to "delivery",
                     "maintenance" to "maintenance",
                     "app-store-release" to "release",

@@ -7,6 +7,9 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Additive `ci` and `testflight-deploy` entry points: frozen-source verification and signed
+  preparation, exact-package automatic upload, and manual branch build/upload without CI.
+  Current-head admission, bounded retention and attempt-aware recovery preserve legacy callers.
 - Signed-package preparation reservations with branch-safe three-component build numbers,
   schema-2 source/app/run provenance, sealed package recovery and manual-origin release guards.
   Existing all-in-one callers, schema-1 packages and receipt identities remain supported.

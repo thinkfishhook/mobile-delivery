@@ -440,6 +440,7 @@ class FakeBuilds : BuildOperations {
         build.ipaBytes = 3
         build.artifact =
             ArtifactManifest(
+                schema = if (build.preparation == null) 1 else 2,
                 sha = build.sha,
                 version = build.version,
                 number = build.number,
@@ -447,6 +448,7 @@ class FakeBuilds : BuildOperations {
                 artifactName = artifactName(build.number),
                 ipa = ArtifactFile("app.ipa", requireNotNull(build.ipaSha256), 3),
                 symbolsAbsentReason = "fixture",
+                preparation = build.preparation,
             )
         output.createDirectories().resolve("app.ipa").writeText("ipa")
         output.resolve("manifest.json").writeText(json.encodeToString(build.artifact))

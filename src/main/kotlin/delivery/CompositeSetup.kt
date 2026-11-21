@@ -15,6 +15,25 @@ internal fun writeEnvironment(values: Map<String, String>, output: Path) {
 
 internal fun configureComposite(env: Map<String, String>, root: Path = Path.of(".")) {
     val name = Path.of(env.getValue("ACTION_PATH")).fileName.toString()
+    if (name in setOf("ci", "testflight-deploy")) {
+        val branch =
+            requireNotNull(env["DELIVERY_ACTION_BRANCH"]?.takeIf { it.isNotBlank() }) {
+                "Set the integration branch"
+            }
+        val mode = if (name == "ci") "ci" else "deploy"
+        JobPolicy(env + ("DELIVERY_VALIDATION_MODE" to mode)).validate(root)
+        writeEnvironment(
+            mapOf(
+                "DELIVERY_VALIDATION_MODE" to mode,
+                "DELIVERY_COMPOSITE" to "true",
+                "DELIVERY_INPUTS" to json.encodeToString(WorkflowInputs(branch = branch)),
+                "DELIVERY_CI_WORKFLOW" to (env["DELIVERY_CI_WORKFLOW"] ?: "ci.yml"),
+                "IOS_DELIVERY_ENABLED" to env.getValue("IOS_DELIVERY_ENABLED"),
+            ),
+            Path.of(env.getValue("GITHUB_ENV")),
+        )
+        return
+    }
     if (name in setOf("verify", "select-xcode")) {
         JobPolicy(env + ("DELIVERY_VALIDATION_MODE" to name)).validate(root)
         writeEnvironment(
@@ -86,7 +105,15 @@ internal fun compositeSummary(root: Path, env: Map<String, String>) {
             .takeIf { it.exists() }
             ?.let { json.parseToJsonElement(it.readText()).jsonObject }
     fun cell(value: String) = value.replace("|", "\\|").replace("\r", " ").replace("\n", " ")
-    val operation = workflowInputs(env)?.operation ?: "automatic"
+    val operation =
+        workflowInputs(env)?.operation
+            ?: when (env["DELIVERY_VALIDATION_MODE"]) {
+                "ci" -> "CI verification and preparation"
+                "deploy" ->
+                    if (env["GITHUB_EVENT_NAME"] == "workflow_dispatch") "manual branch deployment"
+                    else "automatic CI package deployment"
+                else -> "automatic"
+            }
     val fallback =
         if (operation == "verify-signing" && env["DELIVERY_PHASE_OUTCOME"] == "success")
             "Signing identity verified"

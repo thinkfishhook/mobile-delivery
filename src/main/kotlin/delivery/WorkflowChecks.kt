@@ -6,6 +6,7 @@ import kotlin.io.path.*
 class WorkflowChecks {
     fun validate(root: Path) {
         CompositeChecks().validate(root)
+        SplitCompositeChecks().validate(root)
         root.resolve(".github/workflows").listDirectoryEntries("*.yml").forEach { path ->
             val file = path.fileName.toString()
             val doc = workflowDocument(path.readText())
@@ -20,6 +21,8 @@ class WorkflowChecks {
                                 setOf(
                                     "./verify",
                                     "./select-xcode",
+                                    "./ci",
+                                    "./testflight-deploy",
                                     "./testflight",
                                     "./maintenance",
                                     "./app-store-release",

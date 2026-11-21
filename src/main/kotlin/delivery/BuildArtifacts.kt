@@ -34,7 +34,7 @@ data class ArtifactManifest(
                 sha == preparation.request.sha &&
                     version == preparation.version &&
                     number == preparation.number &&
-                    workflow == preparation.workflow &&
+                    (workflow == preparation.workflow || producingAttempt != null) &&
                     artifactName == artifactName(number)
             ) {
                 "Manifest identity differs from its reservation"
@@ -67,6 +67,20 @@ data class ArtifactManifest(
             "Expected an explicit symbols absence reason"
         }
     }
+
+    // Older schema-2 packages used the run URL. New packages name the attempt that
+    // actually produced their bytes, which can follow an interrupted reservation.
+    val producingAttempt: Int?
+        get() = preparation?.let { reservation ->
+            if (workflow == reservation.workflow) reservation.request.producer.attempt
+            else
+                workflow
+                    .takeIf { it.startsWith("${reservation.workflow}/attempts/") }
+                    ?.removePrefix("${reservation.workflow}/attempts/")
+                    ?.takeIf { Regex("[1-9][0-9]*").matches(it) }
+                    ?.toIntOrNull()
+                    ?.takeIf { it >= reservation.request.producer.attempt }
+        }
 }
 
 data class RetainedPackage(val ipa: Path, val manifest: ArtifactManifest)
