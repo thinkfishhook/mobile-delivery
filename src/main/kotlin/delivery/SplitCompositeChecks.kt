@@ -150,6 +150,23 @@ internal class SplitCompositeChecks {
 private fun yamlMappingOrEmpty(value: Any?) = (value as? Map<*, *>).orEmpty()
 
 internal fun validateSplitWorkflow(document: Map<*, *>, job: Map<*, *>, role: String) {
+    val jobs = yamlMapping(document["jobs"])
+    val operationId = jobs.entries.singleOrNull { it.value == job }?.key
+    val reporters = jobs.filterValues { candidate ->
+        val reportingJob = yamlMapping(candidate)
+        workflowSteps(reportingJob).any { reportingAction(it["uses"]) } &&
+            (reportingJob["needs"] == operationId || reportingJob["needs"] == listOf(operationId))
+    }
+    require(reporters.size == 1) {
+        "Split operation requires one independent boundary reporter job, even when checkout or engine installation fails"
+    }
+    val reporter = reporters.entries.single()
+    validateReportingJob(document, reporter.key.toString())
+    require(
+        yamlMapping(workflowSteps(yamlMapping(reporter.value)).single()["with"])["role"] == role
+    ) {
+        "Boundary reporter role must match its CI/deployment operation"
+    }
     val triggers = yamlMapping(document["on"] ?: document[true])
     require(job["env"] == null && document["env"] == null) {
         "Split workflow credentials belong to individual steps"

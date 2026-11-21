@@ -1,0 +1,18 @@
+name: Report delivery operation
+description: Report a completed CI or TestFlight job independently of its engine and checkout.
+inputs:
+  role:
+    description: ci or deploy.
+    required: true
+  operation-job:
+    description: Exact displayed name of the completed non-matrix operation job.
+    required: true
+  integration-branch:
+    description: Existing integration branch, main or trunk.
+    required: true
+  github-token:
+    description: Job token with Actions/Contents read and Issues write.
+    default: ${{ github.token }}
+runs:
+  using: node24
+  main: report.mjs
