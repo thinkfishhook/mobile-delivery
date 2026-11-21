@@ -57,7 +57,7 @@ function replace(body, block) {
 export async function publishFindings({ api, repository, sourceSha, before, after = sourceSha, ref, provider, model, runId, attempt, source, secrets = [], review }) {
   validateReview(review);
   expect(review.complete, 'Provider review is incomplete; findings are not a completed clean review');
-  expect(/^[\w.-]+\/[\w.-]+$/.test(repository) && oid(sourceSha) && oid(before) && /^[1-9]\d*$/.test(String(runId)) && Number.isSafeInteger(attempt) && attempt > 0 && ['codex', 'claude'].includes(provider) && /^[A-Za-z0-9._:/-]{1,128}$/.test(model), 'Invalid review publication provenance');
+  expect(/^[\w.-]+\/[\w.-]+$/.test(repository) && oid(sourceSha) && oid(before) && /^[1-9]\d*$/.test(String(runId)) && Number.isSafeInteger(attempt) && attempt > 0 && ['codex', 'claude', 'connector'].includes(provider) && /^[A-Za-z0-9._:/-]{1,128}$/.test(model) && (provider !== 'connector' || model === 'connector-managed'), 'Invalid review publication provenance');
   const run = `https://github.com/${repository}/actions/runs/${runId}/attempts/${attempt}`;
   const issues = (await pages(api, 'issues?state=all')).filter(issue => !issue.pull_request);
   let published = 0, suppressed = 0;
@@ -86,6 +86,7 @@ export async function publishFindings({ api, repository, sourceSha, before, afte
       const descriptions = observations.map(value => {
         const item = value.finding, loc = value.location;
         const link = `https://github.com/${repository}/blob/${loc.sha}/${loc.path.split('/').map(encodeURIComponent).join('/')}#L${loc.line}`;
+        if (value.provider === 'connector') return `### ${item.priority}: ${safe(item.title)}\n\nSource: [${safe(loc.path)}:${loc.line}](${link}) at ${loc.sha}; landed ${value.sourceSha}.\nProvider/model: connector / connector-managed; [publication run](${value.run}).\n\nNative Connector evidence:\n\n${item.evidence.split('\n').map(line => safe(line)).join('\n')}`;
         return `### ${item.priority}: ${safe(item.title)}\n\nSource: [${safe(loc.path)}:${loc.line}](${link}) at ${loc.sha}; landed ${value.sourceSha}.\nProvider/model: ${safe(value.provider)} / ${safe(value.model)}; [review run](${value.run}).\n\nEvidence/scenario: ${safe(item.evidence)}\n\nImpact: ${safe(item.impact)}\n\nCorrection: ${safe(item.correction)}\n\nRisk context: ${safe(item.risk.affectedSurface)}; ${safe(item.risk.reversibility)}. ${safe(item.risk.reason)} Mitigation: ${safe(item.risk.mitigation)}`;
       }).join('\n\n');
       const block = `${start}\nPriority: **${priority}${priority === 'P0' ? ' — URGENT' : ''}**\n\nRef: ${safe(ref)}; exact landed range ${before} → ${after}.\n\nAsynchronous code finding. This issue never holds CI, package preparation or deployment.\n\n${descriptions}\n\n${dataPrefix}${encoded(status)} -->\n${end}`;

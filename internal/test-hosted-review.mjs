@@ -118,3 +118,23 @@ test('real hosted phase entry points prepare isolated config then expose provide
     await assert.rejects(access(plan.directory));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('native Connector findings use the same anchored deduplication and preserve human closure',async()=>{
+ const {publishNativeFindings}=await import('../review/connector-publish.mjs');
+ const f=fixture();const native={complete:true,model:'connector-managed',sourceSha:sha,findings:[{id:22,reviewId:11,priority:'P2',title:'Preserve saved state',body:'Old readers lose saved records; keep a compatible reader.\n\n<!-- codex-code-review-finding:v1 -->',path:'src/store.kt',line:12,side:'RIGHT',sourceSha:sha}]};
+ const input={...f.options,number:3,view:{before,after:sha},evidence:native,readLine:async()=> '  writeRecord(value)  '};
+ await publishNativeFindings(input);assert.equal(f.issues.length,1);assert.match(f.issues[0].body,/connector-managed/);assert.match(f.issues[0].body,/discussion_r22/);assert.match(f.issues[0].body,/keep a compatible reader/);assert.doesNotMatch(f.issues[0].body,/Risk context:|Impact:|Correction:/);
+ f.issues[0].body+='\nHuman investigation';await publishNativeFindings(input);assert.equal(f.issues.length,1);assert.match(f.issues[0].body,/Human investigation/);
+ f.issues[0].state='closed';const body=f.issues[0].body;const r=await publishNativeFindings(input);assert.equal(r.suppressed,1);assert.equal(f.issues[0].body,body);
+});
+test('native publication validates all committed locations before writing any issue',async()=>{
+ const {publishNativeFindings}=await import('../review/connector-publish.mjs');const f=fixture();
+ const finding={id:22,reviewId:11,priority:'P0',title:'Preserve saved state',body:'Native evidence.\n<!-- codex-code-review-finding:v1 -->',path:'src/store.kt',line:12,side:'LEFT',sourceSha:before};
+ const evidence={complete:true,model:'connector-managed',sourceSha:sha,findings:[finding]};
+ const input={...f.options,number:3,view:{before,after:sha},evidence,readLine:async location=>{assert.equal(location.sourceSha,before);return 'writeRecord(value)';}};
+ await publishNativeFindings(input);assert.match(f.issues[0].title,/P0.*URGENT/);assert.match(f.issues[0].body,new RegExp(`blob/${before}`));
+ for(const changed of [{complete:false},{sourceSha:before},{model:'invented-model'},{findings:[{...finding,sourceSha:'c'.repeat(40)}]},{findings:[{...finding,priority:'P4'}]},{findings:[{...finding,body:'x'.repeat(2100)+'\n<!-- codex-code-review-finding:v1 -->'}]}]){
+  const fresh=fixture();await assert.rejects(publishNativeFindings({...input,...fresh.options,evidence:{...evidence,...changed}}));assert.equal(fresh.issues.length,0);
+ }
+ const fresh=fixture();await assert.rejects(publishNativeFindings({...input,...fresh.options,evidence:{...evidence,findings:[finding,{...finding,id:23,line:13}]},readLine:async location=>{if(location.line===13)throw Error('missing exact source');return 'valid source';}}));assert.equal(fresh.issues.length,0);
+});
