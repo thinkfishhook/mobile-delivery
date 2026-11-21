@@ -21,7 +21,7 @@ function commit(root, object) {
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(resolved)) throw Error('Expected a source commit; non-commit object update requires explicit human acceptance');
   return resolved;
 }
-export async function gitContext(root, updates, remote, { maxBytes = 4 * 1024 * 1024, fetchBase = true } = {}) {
+export async function gitContext(root, updates, remote, { maxBytes = 4 * 1024 * 1024, fetchBase = true, fetchExact } = {}) {
   if (git(root, ['rev-parse', '--is-shallow-repository']).trim() === 'true') throw Error('Shallow history cannot establish the full outgoing range; fetch --unshallow before review or explicitly accept this incomplete range');
   const plans = [], tips = new Set(), inspected = new Set();
   let prompt = '';
@@ -33,7 +33,7 @@ export async function gitContext(root, updates, remote, { maxBytes = 4 * 1024 * 
       try { base = commit(root, update.base); }
       catch {
         if (!fetchBase) throw Error(`Remote base ${update.base} is missing; fetch that exact object before review`);
-        try { git(root, ['-c', 'core.hooksPath=/dev/null', 'fetch', '--no-tags', '--no-recurse-submodules', '--', remote, update.base]); base = commit(root, update.base); }
+        try { if (fetchExact) await fetchExact(update.base); else git(root, ['-c', 'core.hooksPath=/dev/null', 'fetch', '--no-tags', '--no-recurse-submodules', '--', remote, update.base]); base = commit(root, update.base); }
         catch { throw Error(`Cannot fetch exact remote base ${update.base}; review is incomplete`); }
       }
     }

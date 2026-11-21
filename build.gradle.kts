@@ -27,6 +27,9 @@ tasks.test {
         "select-xcode",
         "ci",
         "testflight-deploy",
+        "ai-review",
+        "report-failure",
+        "review",
         "testflight",
         "maintenance",
         "app-store-release",
@@ -98,3 +101,11 @@ val reviewTests =
     }
 
 tasks.check { dependsOn(reviewTests) }
+
+val hostedReviewTests =
+    tasks.register<Exec>("hostedReviewTests") {
+        group = "verification"
+        commandLine("node", "--test", "internal/test-hosted-review.mjs")
+    }
+
+tasks.check { dependsOn(hostedReviewTests) }

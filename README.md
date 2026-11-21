@@ -13,6 +13,8 @@ Split callers also use the independent [failure reporter](docs/failure-reporting
 which records early setup failures without depending on the delivery engine.
 The shared [local risk review](docs/local-risk-review.md) composes existing pre-push hooks
 and reviews exact outgoing refs with Claude or Codex before a push.
+The separate [hosted review](docs/hosted-review.md) publishes landed-push findings as issues
+and keeps review failures outside the CI/deployment gate.
 
 ## Quick start
 
