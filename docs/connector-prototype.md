@@ -54,3 +54,16 @@ apply, and more than 32 changed views is explicitly incomplete before request cr
 Initial, deleted, rewritten, shallow or unavailable histories fail visibly; no subset is
 quietly accepted. The request prototype still accepts only one parent/commit pair until
 this planner and an aggregate-range transport are integrated and validated.
+
+## Native issue publication adapter
+
+`review/connector-publish.mjs` preserves native finding text/priority and reads each exact
+LEFT/RIGHT committed line before any issue write. It passes those anchors through the
+existing deduplicating publisher with provider `connector`, model `connector-managed`,
+and links to both the native PR comment and publication run. It does not invent separate
+impact, correction or risk classifications from the native prose. Existing owned issue
+blocks, urgent P0 handling, human edits and intentionally closed decisions are preserved.
+Unknown priorities, mismatched source/model, unavailable anchors or evidence exceeding the
+shared schema bound fail incomplete before publication. This adapter is fixture-tested;
+no live automatic publication or consumer acceptance is inferred until the workflow is
+integrated and a trusted bot-PR review completes.
