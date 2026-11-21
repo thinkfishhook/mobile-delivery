@@ -26,3 +26,19 @@ with explicit bounds/unsupported states, then normalize anchored P0–P3 native 
 through the existing deduplicating publisher. Preserve human triage and closed decisions;
 provider/publication failures remain visible and never hold CI or deployment. Direct
 main/trunk development remains the app workflow; review PRs are an internal transport.
+
+## Native evidence boundary
+
+The Actions trial created review-only PR #26, but its bot-authored mention received an
+account-link prompt rather than native inference. Human-authored requests have completed
+and produced useful P2 findings. Repository automatic-review authentication remains under
+investigation; request creation is not acceptance of this mode.
+
+`review/connector-evidence.mjs` reads the observed native v1 summary and finding markers.
+It requires the known Connector bot identity, exact immutable PR head/base, completed
+exact-head metadata, matching standard review receipts for findings, and complete bounded
+comment inventories. It retains P0–P3 priorities, native text and LEFT/RIGHT source identity;
+unknown formats, source movement, absent findings or contradictory state fail incomplete.
+It checks source/state again after collecting comments. The format is observed behavior,
+not a guaranteed public API. This reader alone does not publish issues or establish full
+landed-range coverage, automatic authentication or consumer acceptance.

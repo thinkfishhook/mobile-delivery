@@ -125,7 +125,12 @@ distributions {
 val connectorRequestTests =
     tasks.register<Exec>("connectorRequestTests") {
         group = "verification"
-        commandLine("node", "--test", "internal/test-connector-request.mjs")
+        commandLine(
+            "node",
+            "--test",
+            "internal/test-connector-request.mjs",
+            "internal/test-connector-evidence.mjs",
+        )
     }
 
 tasks.check { dependsOn(connectorRequestTests) }
