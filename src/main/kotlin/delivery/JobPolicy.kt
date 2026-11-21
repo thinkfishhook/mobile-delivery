@@ -5,6 +5,8 @@ import kotlin.io.path.readText
 
 private val callerPermissions =
     mapOf(
+        "ci" to linkedMapOf("contents" to "write", "actions" to "write", "issues" to "write"),
+        "deploy" to linkedMapOf("contents" to "write", "actions" to "read", "issues" to "write"),
         "delivery" to linkedMapOf("contents" to "read", "actions" to "write", "issues" to "write"),
         "maintenance" to
             linkedMapOf("contents" to "read", "actions" to "read", "issues" to "write"),
@@ -35,6 +37,7 @@ class JobPolicy(private val env: Map<String, String>) {
             requireNotNull((document["jobs"] as? Map<*, *>)?.get(jobName) as? Map<*, *>) {
                 "$caller: caller job is missing; add jobs: { $jobName: { ... } }"
             }
+        if (mode in setOf("ci", "deploy")) validateSplitWorkflow(document, job, mode!!)
         val group = if (mode == "rollout") "ios-rollout" else "ios-delivery"
         val lock = "concurrency: { group: $group, queue: max, cancel-in-progress: false }"
         val concurrency = job["concurrency"] as? Map<*, *>

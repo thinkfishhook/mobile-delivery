@@ -54,6 +54,27 @@ internal fun runTask(
             return
         }
     }
+    if (mode in SplitTool.modes) {
+        try {
+            SplitTool(root, DeliveryConfig.load(root, env), commands, env).run(mode)
+        } catch (error: Exception) {
+            writeRunSummary(
+                root,
+                env,
+                RunSummary(
+                    "failed",
+                    "Split operation $mode failed",
+                    listOfNotNull(error.displayMessage()),
+                    emptyList(),
+                    testFailures = (error as? VerificationFailure)?.testFailures.orEmpty(),
+                    failingCommand = (error as? VerificationFailure)?.failingCommand,
+                    verificationFailureKind = (error as? VerificationFailure)?.kind,
+                ),
+            )
+            throw error
+        }
+        return
+    }
     val config = DeliveryConfig.load(root, env, mode)
     when (mode) {
         "validate" ->

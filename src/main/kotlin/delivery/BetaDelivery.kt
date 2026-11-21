@@ -292,6 +292,43 @@ class BetaDelivery(
             "Reserved packages require the split preparation/deployment contract, not the legacy all-in-one caller"
         }
         require(manifest.sha == sha) { "The retained build belongs to ${manifest.sha}" }
+        return publishRetained(retainedPackage, destination)
+    }
+
+    // Shared upload/reconciliation for legacy and split callers; no verification or archive.
+    internal fun publishPrepared(
+        record: PreparationRecord,
+        destination: Path,
+        download: (PreparationRecord, Path) -> RetainedPackage,
+        beforeUpload: () -> Unit,
+    ): Receipt {
+        val manifest = requireNotNull(record.manifest) { "No sealed package" }
+        val known =
+            apple.testFlightBuilds().any { it.number == manifest.number.value } ||
+                apple.uploads().any { it.number == manifest.number.value }
+        // Processing/distribution recovery needs no retained IPA and must survive expiry or
+        // integration-branch movement. New-upload admission applies only before an actual upload.
+        val retained =
+            if (known) RetainedPackage(destination.resolve(manifest.ipa.name), manifest)
+            else {
+                beforeUpload()
+                download(record, destination)
+            }
+        return publishRetained(retained, destination) {
+            require(!known) {
+                "Previously observed Apple upload disappeared; reconcile it before attempting any new upload"
+            }
+            beforeUpload()
+        }
+    }
+
+    internal fun publishRetained(
+        retainedPackage: RetainedPackage,
+        destination: Path,
+        beforeUpload: () -> Unit = {},
+    ): Receipt {
+        val manifest = retainedPackage.manifest
+        val sha = manifest.sha
         val facts = facts()
         val listed =
             (facts.uploads.filter { it.number == manifest.number.value }.map { it.version } +
@@ -302,6 +339,7 @@ class BetaDelivery(
             "Apple already has ${manifest.number} under ${(listed - manifest.version.value).joinToString()}; ${manifest.version}/${manifest.number} is not uploaded"
         }
         if (listed.isEmpty()) {
+            beforeUpload()
             requireUploadCooldownElapsed(facts.uploads)
             try {
                 apple.upload(retainedPackage.ipa, destination)
@@ -381,7 +419,8 @@ class BetaDelivery(
                 "::warning::Receipt for $version/$number not written yet: ${it.displayMessage()}"
             )
         }
-        if (write.isSuccess) onReceipted(receipt)
+        if (write.isSuccess && manifest?.preparation?.request?.origin != PackageOrigin.MANUAL)
+            onReceipted(receipt)
         return receipt
     }
 }

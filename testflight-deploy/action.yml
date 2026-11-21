@@ -1,0 +1,166 @@
+name: TestFlight Deploy
+description: Upload the exact upstream CI package, or build and upload a human-selected branch without CI or AI prerequisites.
+inputs:
+  branch:
+    description: Configured integration branch, main or trunk.
+    required: true
+  ci-workflow:
+    description: Producing Continuous Integration workflow filename.
+    default: ci.yml
+  delivery-enabled:
+    description: Existing IOS_DELIVERY_ENABLED switch, exactly true or false.
+    required: true
+  github-token:
+    description: Caller job token with the operation's minimum permissions.
+    default: ${{ github.token }}
+  asc-key-id:
+    description: App Store Connect API key ID.
+    required: true
+  asc-issuer-id:
+    description: App Store Connect API issuer ID.
+    required: true
+  asc-private-key:
+    description: App Store Connect key, used only for identity metadata and deployment operations.
+    required: true
+  distribution-p12:
+    description: Signing certificate, bound only while preparing CI or manual packages.
+    required: true
+  distribution-p12-password:
+    description: Signing certificate password.
+    required: true
+  provisioning-profile:
+    description: App Store provisioning profile.
+    required: true
+  receipt-token:
+    description: Existing token for immutable deployment receipt writes.
+    required: true
+outputs:
+  published:
+    description: True when internal TestFlight availability is confirmed.
+    value: ${{ steps.upload.outputs.published || 'false' }}
+  build:
+    description: Confirmed build number.
+    value: ${{ steps.upload.outputs.build }}
+  package-digest:
+    description: SHA-256 of the uploaded or recovered IPA.
+    value: ${{ steps.upload.outputs.package_digest }}
+runs:
+  using: composite
+  steps:
+    - name: Checkout the caller
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.repository.default_branch }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Compute engine cache key
+      id: engine-key
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        echo "key=$(bash "$tool_root/internal/engine/cache-key.sh" "$tool_root")" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-cache
+      with:
+        path: ${{ runner.temp }}/mobile-delivery-engine/${{ steps.engine-key.outputs.key }}
+        key: ${{ steps.engine-key.outputs.key }}
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: engine-gradle
+      if: steps.engine-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          ~/.gradle/wrapper
+          ~/.gradle/caches
+        key: delivery-gradle-${{ steps.engine-key.outputs.key }}
+        restore-keys: delivery-gradle-mobile-delivery-${{ runner.os }}-${{ runner.arch }}-
+    - name: Install the action's engine
+      id: engine-install
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DELIVERY_ACTION_REPOSITORY: ${{ github.action_repository }}
+        DELIVERY_ACTION_SHA: ${{ github.action_ref }}
+        DELIVERY_ACTION_BRANCH: ${{ inputs.branch }}
+        DELIVERY_CI_WORKFLOW: ${{ inputs.ci-workflow }}
+        IOS_DELIVERY_ENABLED: ${{ inputs.delivery-enabled }}
+      run: |
+        tool_root="$(cd "$ACTION_PATH/.." && pwd)"
+        runtime="$RUNNER_TEMP/mobile-delivery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB"
+        bash "$tool_root/internal/engine/install.sh" "$tool_root" "$runtime"
+        "$runtime/bin/mobile-delivery" configureComposite
+    - name: Select the frozen source and event path
+      id: select
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: mobile-delivery selectSplit
+    - name: Select configured Xcode for manual preparation
+      if: steps.select.outputs.manual == 'true' && steps.select.outputs.selected == 'true'
+      shell: bash
+      run: mobile-delivery selectXcode
+    - name: Install Android tools when configured
+      if: steps.select.outputs.manual == 'true' && steps.select.outputs.selected == 'true' && steps.select.outputs.android == 'true'
+      uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+      with:
+        packages: platform-tools
+    - name: Prepare the configured Android SDK
+      if: steps.select.outputs.manual == 'true' && steps.select.outputs.selected == 'true' && steps.select.outputs.android == 'true'
+      shell: bash
+      run: mobile-delivery setupAndroid
+    - name: Install pinned asc
+      if: steps.select.outputs.selected == 'true' && inputs.delivery-enabled == 'true'
+      shell: bash
+      run: mobile-delivery installAsc
+    - name: Build the human-selected source without CI or AI review
+      id: prepare
+      if: steps.select.outputs.manual == 'true' && steps.select.outputs.selected == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+        IOS_DISTRIBUTION_P12_BASE64: ${{ inputs.distribution-p12 }}
+        IOS_DISTRIBUTION_P12_PASSWORD: ${{ inputs.distribution-p12-password }}
+        IOS_PROFILE_BASE64: ${{ inputs.provisioning-profile }}
+      run: mobile-delivery preparePackage
+    - name: Retain the sealed signed package
+      if: steps.prepare.outputs.retain == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.prepare.outputs.artifact_name }}
+        path: ${{ steps.prepare.outputs.artifact_path }}
+        retention-days: 14
+        if-no-files-found: error
+    - name: Upload or recover the exact sealed package
+      id: upload
+      if: steps.select.outputs.selected == 'true' && inputs.delivery-enabled == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        IOS_RECEIPT_TOKEN: ${{ inputs.receipt-token }}
+        ASC_KEY_ID: ${{ inputs.asc-key-id }}
+        ASC_ISSUER_ID: ${{ inputs.asc-issuer-id }}
+        ASC_PRIVATE_KEY: ${{ inputs.asc-private-key }}
+        ASC_STRICT_AUTH: 'true'
+      run: mobile-delivery deployPackage
+    - name: Retain bounded operation evidence
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: delivery-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          build/ci-verification
+          build/delivery/run-summary.json
+          build/delivery/**/*.log
+        retention-days: 14
+        if-no-files-found: warn
+    - name: Summarize the operation
+      if: always() && steps.engine-install.outcome == 'success'
+      shell: bash
+      env:
+        DELIVERY_PHASE_OUTCOME: ${{ job.status }}
+      run: mobile-delivery compositeSummary

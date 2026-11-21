@@ -6,6 +6,10 @@ Four GitHub Actions verify an iOS app, deliver it to TestFlight, reconcile deliv
 and manage App Store releases. They support native Xcode and Kotlin Multiplatform apps.
 Your repository owns the jobs, runners and secrets; each composite owns its delivery steps.
 
+The unreleased additive `ci` and `testflight-deploy` actions separate preparation from
+upload and support manual branch delivery. See the [split delivery contract](docs/split-delivery.md)
+for event, credential, recovery and migration boundaries.
+
 ## Quick start
 
 Start with delivery disabled. A push will build and test your app and retain its evidence.
