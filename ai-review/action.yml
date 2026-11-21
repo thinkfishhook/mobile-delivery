@@ -1,0 +1,85 @@
+name: AI Code Review
+description: Independently review the exact landed push with Codex or Claude and publish actionable issues without gating delivery.
+inputs:
+  branch:
+    description: Existing integration branch, main or trunk.
+    required: true
+  provider:
+    description: Exactly one provider, codex or claude.
+    default: codex
+  model:
+    description: Explicit currently supported model for the selected provider.
+    required: true
+  provider-api-key:
+    description: Only the selected provider's API credential.
+    required: true
+  github-token:
+    description: Caller token with Contents read and Issues write.
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Checkout the landed source as data
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.sha }}
+        fetch-depth: 0
+        persist-credentials: false
+    - name: Select the review runtime
+      uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+      with:
+        node-version: '24'
+    - name: Freeze the exact landed range and read-only context
+      id: prepare
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        AI_REVIEW_BRANCH: ${{ inputs.branch }}
+        AI_REVIEW_PROVIDER: ${{ inputs.provider }}
+        AI_REVIEW_MODEL: ${{ inputs.model }}
+        AI_REVIEW_KEY_PRESENT: ${{ inputs.provider-api-key != '' }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "$ACTION_PATH/../review/hosted.mjs" prepare
+    - name: Review with Codex through the official credential proxy
+      id: codex
+      if: steps.prepare.outputs.ready == 'true' && inputs.provider == 'codex'
+      continue-on-error: true
+      uses: openai/codex-action@306c6a196a99dcc6582530c396a19d2672d5e9ec # v1
+      with:
+        openai-api-key: ${{ inputs.provider-api-key }}
+        model: ${{ inputs.model }}
+        codex-version: '0.166.0'
+        safety-strategy: drop-sudo
+        sandbox: read-only
+        codex-home: ${{ steps.prepare.outputs.home }}
+        working-directory: ${{ steps.prepare.outputs.working }}
+        prompt-file: ${{ steps.prepare.outputs.prompt }}
+        output-schema-file: ${{ steps.prepare.outputs.schema }}
+        output-file: ${{ steps.prepare.outputs.result }}
+        codex-args: '["--ephemeral"]'
+        allow-bot-users: dependabot[bot],github-actions[bot]
+    - name: Install the pinned Claude interface without credentials
+      id: install-claude
+      if: steps.prepare.outputs.ready == 'true' && inputs.provider == 'claude'
+      continue-on-error: true
+      shell: bash
+      run: npm install --global @anthropic-ai/claude-code@2.1.325
+    - name: Review with Claude through the shared read-only adapter
+      id: claude
+      if: steps.prepare.outputs.ready == 'true' && inputs.provider == 'claude' && steps.install-claude.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        AI_REVIEW_PLAN: ${{ steps.prepare.outputs.plan }}
+        ANTHROPIC_API_KEY: ${{ inputs.provider-api-key }}
+      run: node "$ACTION_PATH/../review/hosted.mjs" claude
+    - name: Publish findings or expose the review operation failure
+      if: always()
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        AI_REVIEW_PLAN: ${{ steps.prepare.outputs.plan }}
+        AI_REVIEW_PROVIDER_OUTCOME: ${{ inputs.provider == 'codex' && steps.codex.outcome || steps.claude.outcome }}
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: node "$ACTION_PATH/../review/hosted.mjs" publish

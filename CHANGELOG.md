@@ -7,6 +7,8 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Independent hosted Codex/Claude review of exact landed ranges, actionable P1–P3 and urgent
+  P0 issues, stable-anchor deduplication and visible non-gating operation failures.
 - Shared Claude/Codex pre-push risk review with exact multi-ref history, read-only committed
   context, priority-independent risk decisions, scoped acceptance and safe hook composition.
 - Independent workflow-boundary CI/TestFlight incident reporting, bounded named-test

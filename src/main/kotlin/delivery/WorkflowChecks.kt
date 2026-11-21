@@ -7,12 +7,19 @@ class WorkflowChecks {
     fun validate(root: Path) {
         CompositeChecks().validate(root)
         SplitCompositeChecks().validate(root)
+        HostedReviewChecks().validate(root)
         root.resolve(".github/workflows").listDirectoryEntries("*.yml").forEach { path ->
             val file = path.fileName.toString()
             val doc = workflowDocument(path.readText())
             require(doc["env"] == null) { "$file: credentials belong to steps" }
             yamlMapping(doc["jobs"]).forEach { (name, value) ->
                 val job = yamlMapping(value)
+                if (
+                    workflowSteps(job).any {
+                        it["uses"] == "./ai-review" || it["uses"].toString().contains("/ai-review@")
+                    }
+                )
+                    validateHostedReviewWorkflow(doc, name.toString())
                 if (workflowSteps(job).any { reportingAction(it["uses"]) })
                     validateReportingJob(doc, name.toString())
                 require(job["env"] == null) { "$file $name: credentials belong to steps" }
@@ -34,7 +41,7 @@ class WorkflowChecks {
                             CompositeChecks().validateCaller(root, file, name.toString(), action)
                         require(
                             localComposite ||
-                                action == "./report-failure" ||
+                                action in setOf("./report-failure", "./ai-review") ||
                                 Regex("[\\w./-]+@[a-f0-9]{40}").matches(action)
                         ) {
                             "$file: $action is not pinned to a full commit SHA"
