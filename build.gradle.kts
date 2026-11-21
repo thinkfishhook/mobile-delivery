@@ -121,3 +121,11 @@ distributions {
         }
     }
 }
+
+val connectorRequestTests =
+    tasks.register<Exec>("connectorRequestTests") {
+        group = "verification"
+        commandLine("node", "--test", "internal/test-connector-request.mjs")
+    }
+
+tasks.check { dependsOn(connectorRequestTests) }
