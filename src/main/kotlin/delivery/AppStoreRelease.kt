@@ -45,6 +45,26 @@ class AppStoreRelease(
                 apple.testFlightBuilds(),
                 receipts,
                 submissions = apple.reviewSubmissions(),
+                unqualifiedReceipts =
+                    receipts
+                        .filter { tag ->
+                            val number = runCatching {
+                                BuildNumber(tag.substringAfterLast('/'))
+                            }
+                                .getOrNull()
+                            if (number?.legacyCount != null) false
+                            else {
+                                val request = tags.read(tag)?.preparation?.request
+                                request == null ||
+                                    request.origin != PackageOrigin.CI_VERIFIED ||
+                                    request.bundleId != config.bundleId ||
+                                    request.repository != env["GITHUB_REPOSITORY"] ||
+                                    workflowInputs(env)?.branch?.let {
+                                        request.ref != "refs/heads/$it"
+                                    } == true
+                            }
+                        }
+                        .toSet(),
             )
         val targets by lazy {
             val selection = Selection(current, eligibilityRules(current))
@@ -72,6 +92,7 @@ class AppStoreRelease(
             receipts,
             holds,
             current.submissions,
+            current.unqualifiedReceipts,
         )
     }
 
@@ -265,8 +286,10 @@ class AppStoreRelease(
             )
         }
         val tag = "submit/appstore/$version/${build.number}"
-        val receipt = storeReceipt(sha, version, build.number, build.id, versionId)
-        val repair = attemptEffect { tags.write(tag, sha, receipt) }.exceptionOrNull()
+        val repair = attemptEffect {
+            tags.write(tag, sha, storeReceipt(sha, version, build.number, build.id, versionId))
+        }
+            .exceptionOrNull()
         if (!request.scheduled)
             println(
                 "Critical fix? Request an expedited review in App Store Connect; this tool never does."
@@ -477,5 +500,16 @@ class AppStoreRelease(
         number: String,
         buildId: String,
         versionId: String,
-    ) = Receipt(sha, version, BuildNumber(number), buildId, ascVersionId = versionId)
+    ) =
+        Receipt(
+            sha,
+            version,
+            BuildNumber(number),
+            buildId,
+            ascVersionId = versionId,
+            preparation =
+                if (BuildNumber(number).legacyCount == null)
+                    tags.read("deploy/testflight/$version/$number")?.preparation
+                else null,
+        )
 }

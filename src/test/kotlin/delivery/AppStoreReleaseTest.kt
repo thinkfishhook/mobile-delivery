@@ -8,6 +8,36 @@ import kotlin.test.*
 import org.junit.Test
 
 class AppStoreReleaseTest {
+    @Test
+    fun `modern receipt read failure after accepted submission is a repair warning`() {
+        val store = released()
+        val p =
+            Preparation(preparationRequest(), MarketingVersion("26.09.02"), BuildNumber("405.1.1"))
+        val manifest = preparedManifest(p, "ipa".toByteArray())
+        store.apple.builds +=
+            TestFlightBuild("modern", p.version.value, p.number.value, "VALID", false)
+        store.source.shas += p.request.sha
+        store.tags.write(
+            "deploy/testflight/${p.version}/${p.number}",
+            p.request.sha,
+            Receipt(p.request.sha, p.version, p.number, "modern", preparation = p),
+        )
+        store.artifacts.retained[manifest.artifactName] =
+            "123" to
+                mapOf(
+                    "App.ipa" to "ipa".toByteArray(),
+                    "manifest.json" to
+                        json.encodeToString(ArtifactManifest.serializer(), manifest).toByteArray(),
+                )
+        store.apple.interrupt = { phase ->
+            if (phase == "after-submit") store.tags.failReads = true
+        }
+        val result = store.release().promote(scheduled)
+        assertEquals(1, store.submitted().size)
+        assertContains(result.outcome, "submitted")
+        assertContains(result.action!!, "Submission accepted")
+    }
+
     private val wednesday = clock
     private val tuesday = Clock.fixed(Instant.parse("2026-09-15T15:00:00Z"), clock.zone)
     private val thursday = Clock.fixed(Instant.parse("2026-09-17T04:30:00Z"), clock.zone)

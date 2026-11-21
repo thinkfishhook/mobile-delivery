@@ -16,7 +16,7 @@ internal fun redStreakSuspects(
     val delivered =
         requireReceiptNames("deploy/testflight/", tags.names("deploy/testflight/"))
             .sortedWith(
-                compareByDescending<String> { BuildNumber(it.substringAfterLast('/')).count }
+                compareByDescending<String> { StoreFacts.buildCount(it.substringAfterLast('/')) }
                     .thenByDescending { BuildNumber(it.substringAfterLast('/')).attempt }
             )
             .asSequence()

@@ -49,6 +49,7 @@ class StoreFacts(
     val receipts: Set<String>,
     val holds: List<Hold> = emptyList(),
     val submissions: List<ReviewSubmission> = emptyList(),
+    val unqualifiedReceipts: Set<String> = emptySet(),
 ) {
     val ignoredVersions =
         versions.filterNot { MarketingVersion.accepts(it.version) }.map { it.version }.distinct()
@@ -80,12 +81,15 @@ class StoreFacts(
                 Candidate(
                     it,
                     "deploy/testflight/${it.version}/${it.number}"
-                        .takeIf { tag -> tag in receipts },
+                        .takeIf { tag -> tag in receipts && tag !in unqualifiedReceipts },
                 )
             }
 
     companion object {
-        fun buildCount(number: String) = number.substringBefore('.').toIntOrNull() ?: 0
+        fun buildCount(number: String): Long =
+            if (number.count { it == '.' } == 2)
+                runCatching { appleBuildOrder(number) }.getOrDefault(0)
+            else (number.substringBefore('.').toLongOrNull() ?: 0) * 10000
     }
 }
 
@@ -105,7 +109,7 @@ fun eligibilityRules(
             it.build.processingState == "VALID" && !it.build.expired
         },
         EligibilityRule("is newer than the last App Store release") {
-            last == null || (it.build.count ?: 0) > last
+            last == null || StoreFacts.buildCount(it.build.number) > last
         },
         EligibilityRule("has a marketing version not yet on the App Store") {
             it.build.version !in facts.usedVersions
@@ -121,7 +125,7 @@ class Selection(facts: StoreFacts, private val rules: List<EligibilityRule>) {
         facts
             .candidates()
             .sortedWith(
-                compareByDescending<Candidate> { it.build.count ?: 0 }
+                compareByDescending<Candidate> { StoreFacts.buildCount(it.build.number) }
                     .thenByDescending { it.build.attempt }
             )
 

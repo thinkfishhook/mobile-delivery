@@ -169,6 +169,7 @@ class DeliveryTool(
                 GitHubIncidents(github, config.incidentMarker, branch),
                 github::queuedPush,
                 hints,
+                preparations = { GitHubPreparationStore(github).read().records },
                 redStreak = { sha ->
                     val summaryFile = root.resolve("build/delivery/run-summary.json")
                     val current =

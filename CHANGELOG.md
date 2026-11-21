@@ -7,6 +7,9 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Signed-package preparation reservations with branch-safe three-component build numbers,
+  schema-2 source/app/run provenance, sealed package recovery and manual-origin release guards.
+  Existing all-in-one callers, schema-1 packages and receipt identities remain supported.
 - Public `verify` and `select-xcode` composite actions with read-only caller permissions
   and no credential inputs, plus policy checks and credential-free composite self-tests.
 - Verification-only workflow examples and the runner Xcode selection contract.
