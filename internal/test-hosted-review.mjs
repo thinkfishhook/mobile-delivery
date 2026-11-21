@@ -133,7 +133,7 @@ test('native publication validates all committed locations before writing any is
  const evidence={complete:true,model:'connector-managed',sourceSha:sha,findings:[finding]};
  const input={...f.options,number:3,view:{before,after:sha},evidence,readLine:async location=>{assert.equal(location.sourceSha,before);return 'writeRecord(value)';}};
  await publishNativeFindings(input);assert.match(f.issues[0].title,/P0.*URGENT/);assert.match(f.issues[0].body,new RegExp(`blob/${before}`));
- for(const changed of [{complete:false},{sourceSha:before},{model:'invented-model'},{findings:[{...finding,sourceSha:'c'.repeat(40)}]},{findings:[{...finding,priority:'P4'}]},{findings:[{...finding,body:'x'.repeat(2100)}]}]){
+ for(const changed of [{complete:false},{sourceSha:before},{model:'invented-model'},{findings:[{...finding,sourceSha:'c'.repeat(40)}]},{findings:[{...finding,priority:'P4'}]},{findings:[{...finding,body:'x'.repeat(2100)+'\n<!-- codex-code-review-finding:v1 -->'}]}]){
   const fresh=fixture();await assert.rejects(publishNativeFindings({...input,...fresh.options,evidence:{...evidence,...changed}}));assert.equal(fresh.issues.length,0);
  }
  const fresh=fixture();await assert.rejects(publishNativeFindings({...input,...fresh.options,evidence:{...evidence,findings:[finding,{...finding,id:23,line:13}]},readLine:async location=>{if(location.line===13)throw Error('missing exact source');return 'valid source';}}));assert.equal(fresh.issues.length,0);
