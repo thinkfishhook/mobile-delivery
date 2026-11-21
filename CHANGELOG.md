@@ -7,6 +7,8 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Shared Claude/Codex pre-push risk review with exact multi-ref history, read-only committed
+  context, priority-independent risk decisions, scoped acceptance and safe hook composition.
 - Independent workflow-boundary CI/TestFlight incident reporting, bounded named-test
   diagnostics, serialized deduplication, exact credential recovery and preserved human triage.
 - Additive `ci` and `testflight-deploy` entry points: frozen-source verification and signed
