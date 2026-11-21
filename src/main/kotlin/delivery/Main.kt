@@ -49,6 +49,13 @@ internal fun runTask(
             println("Composites and CI workflows keep the delivery safety properties.")
             return
         }
+        "callerChecks" -> {
+            CallerChecks().validate(root, args.getOrNull(1) ?: "thinkfishhook/mobile-delivery")
+            println(
+                "App callers keep the shared action permissions, queue and workflow boundaries."
+            )
+            return
+        }
         "installAsc" -> {
             installAsc(Toolchain.bundled, commands, env)
             return

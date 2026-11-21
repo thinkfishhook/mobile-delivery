@@ -1,0 +1,55 @@
+{
+  "app_id": "1234567890 # CHANGE ME: app_id",
+  "bundle_id": "com.example.app # CHANGE ME: bundle_id",
+  "team_id": "ABCDE12345 # CHANGE ME: team_id",
+  "internal_group": "00000000-0000-0000-0000-000000000000 # CHANGE ME: internal_group",
+  "baseline": "0000000000000000000000000000000000000000 # CHANGE ME: baseline",
+  "timezone": "America/New_York # CHANGE ME: timezone",
+  "xcode": "26.6 # CHANGE ME: xcode",
+  "ios": {
+    "project": "App.xcodeproj # CHANGE ME: ios.project",
+    "scheme": "App # CHANGE ME: ios.scheme",
+    "target": "App # CHANGE ME: ios.target",
+    "name": "App # CHANGE ME: ios.name"
+  },
+  "verification": {
+    "commands": [
+      [
+        "xcodebuild",
+        "test",
+        "-project",
+        "App.xcodeproj # CHANGE ME: match your app and installed simulator",
+        "-scheme",
+        "App # CHANGE ME: match your app and installed simulator",
+        "-destination",
+        "platform=iOS Simulator,OS=26.5,name=iPhone 17 # CHANGE ME: match your app and installed simulator",
+        "-resultBundlePath",
+        "build/tests/UnitTests.xcresult",
+        "-testPlan",
+        "UnitTests # CHANGE ME: match your app and installed simulator"
+      ],
+      [
+        "xcodebuild",
+        "test",
+        "-project",
+        "App.xcodeproj # CHANGE ME: match your app and installed simulator",
+        "-scheme",
+        "App # CHANGE ME: match your app and installed simulator",
+        "-destination",
+        "platform=iOS Simulator,OS=26.5,name=iPhone 17 # CHANGE ME: match your app and installed simulator",
+        "-resultBundlePath",
+        "build/tests/UITests.xcresult",
+        "-testPlan",
+        "UITests # CHANGE ME: match your app and installed simulator"
+      ]
+    ],
+    "test_reports": [
+      "build/tests/UnitTests.xcresult",
+      "build/tests/UITests.xcresult"
+    ]
+  },
+  "release_notes": {
+    "fallback": "Maintenance improvements. # CHANGE ME: approved public release-note fallback"
+  },
+  "tester_notes": "Check sign-in, the main flows, small screens and large text. Report regressions with the build number. # CHANGE ME: tester_notes"
+}

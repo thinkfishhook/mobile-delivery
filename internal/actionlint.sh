@@ -18,7 +18,7 @@ tar -xzf "$archive" -C "$scratch" actionlint
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 files=()
-for directory in .github/workflows examples/quickstart/.github/workflows; do
+for directory in .github/workflows examples/{quickstart,xcode,kmp,legacy}/.github/workflows; do
   [[ -d "$directory" ]] || continue
   while IFS= read -r file; do files+=("$file"); done < <(find "$directory" -type f \( -name '*.yml' -o -name '*.yaml' \) | sort)
 done

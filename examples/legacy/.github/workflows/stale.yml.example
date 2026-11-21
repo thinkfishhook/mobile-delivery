@@ -1,0 +1,21 @@
+# Optional: rename to stale.yml only if you want this issue-closing policy.
+name: Stale issues
+on:
+  schedule:
+    - cron: '17 4 * * 1' # CHANGE ME: maintenance cadence
+  workflow_dispatch:
+permissions:
+  issues: write
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11.0.0
+        with:
+          exempt-issue-labels: testflight-hold,ios-delivery
+          days-before-issue-stale: 60 # CHANGE ME: agreed issue inactivity policy
+          days-before-issue-close: 7 # CHANGE ME: agreed warning period
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          stale-issue-message: 'This issue has been inactive for 60 days. Comment to keep it open.' # CHANGE ME: match your policy
+          close-issue-message: 'Closed after the inactivity warning period.'

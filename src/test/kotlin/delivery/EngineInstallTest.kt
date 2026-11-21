@@ -66,6 +66,11 @@ class EngineInstallTest {
                     "settings.gradle.kts",
                     "gradlew",
                     "internal/engine/install.sh",
+                    "LICENSE",
+                    "docs/upgrade-v1.1.md",
+                    "review/schema.json",
+                    "review/cli.mjs",
+                    "report-failure/report.mjs",
                 )
             for (folder in listOf(source, copy)) for (file in files) folder.resolve(file).apply {
                 parent.createDirectories()

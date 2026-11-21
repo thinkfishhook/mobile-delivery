@@ -10,26 +10,25 @@ class QuickstartTest {
     private val overlay = repository.resolve("examples/quickstart")
 
     @Test
-    fun `README and quickstart pin all four composites to the same v1 release`() {
-        val composites =
-            setOf("testflight", "maintenance", "app-store-release", "app-store-rollout")
-        val reference =
-            Regex("thinkfishhook/mobile-delivery/([a-z-]+)@([a-f0-9]{40}) # ([^\\r\\n]+)")
-        val files =
-            overlay.resolve(".github/workflows").listDirectoryEntries("*.yml") +
-                listOf(repository.resolve("README.md"))
+    fun `quickstart covers the split action surface with one coherent full pin`() {
+        val reference = Regex("thinkfishhook/mobile-delivery/([a-z-]+)@([a-f0-9]{40})")
+        val files = overlay.resolve(".github/workflows").listDirectoryEntries("*.yml")
         val pins = files.flatMap { reference.findAll(it.readText()).toList() }
-        assertEquals(setOf("v1.0.0"), pins.map { it.groupValues[3] }.toSet())
-        assertEquals(8, pins.size)
-        for (file in files) {
-            val matches = reference.findAll(file.readText()).toList()
-            assertEquals(
-                if (file.name == "README.md") composites else setOf(file.nameWithoutExtension),
-                matches.map { it.groupValues[1] }.toSet(),
-                file.name,
-            )
-        }
+        assertEquals(
+            setOf(
+                "ci",
+                "testflight-deploy",
+                "ai-review",
+                "report-failure",
+                "verify",
+                "maintenance",
+                "app-store-release",
+                "app-store-rollout",
+            ),
+            pins.map { it.groupValues[1] }.toSet(),
+        )
         assertEquals(1, pins.map { it.groupValues[2] }.toSet().size)
+        CallerChecks().validate(overlay)
     }
 
     @Test
@@ -103,7 +102,8 @@ class QuickstartTest {
                     Triple("app-store-release", "release", "release"),
                     Triple("app-store-rollout", "rollout", "rollout"),
                 )) {
-                val source = overlay.resolve(".github/workflows/$file.yml").readText()
+                val source =
+                    repository.resolve("examples/legacy/.github/workflows/$file.yml").readText()
                 assertTrue(
                     Regex("thinkfishhook/mobile-delivery/[^@]+@[a-f0-9]{40} # v[0-9]")
                         .containsMatchIn(source)

@@ -6,11 +6,22 @@ every live criterion is linked. Record UTC observation times, exact caller and t
 SHAs, run attempt, event type, job runner and any limits of the observation.
 Configuration and fixture tests support live evidence; they do not replace it.
 
+## Split contract acceptance
+
+The original v1 ledger retains its historical observations. The upgrade baseline is
+v1.0.2 or a later stable release with its exact full SHA recorded. New v1.1 migrations
+must also link successful deterministic CI, its sealed source/run/attempt/build/digest,
+and automatic deployment of that same package with confirmed internal TestFlight
+availability. Static caller checks and fixtures do not replace those live results.
+Hosted P0 creates an urgent issue and never gates deployment. Manual branch fixtures
+qualify contract validation; live manual evidence remains explicitly pending until
+naturally exercised. Keep the queue study outside the acceptance gate.
+
 ## Delivery, maintenance and triggers
 
 For each app, link the successful delivery-branch **push** run and receipt ref.
 Peel annotated receipt tags to their commit and compare it with the delivered SHA.
-Read the caller workflow at that SHA to verify all four composite pins. Verify the
+Read the caller workflow at that SHA to verify all used shared action pins. Verify the
 tool SHA in the delivery log as well. For maintenance, require `event=schedule`, a
 green sweep and the released pin; a hand-dispatched sweep does not qualify.
 
@@ -22,7 +33,7 @@ point-in-time observation, not proof that future tags cannot trigger workflows.
 
 For Dependabot, link each app's successful update job and inspect its log for
 public-source fetches and repository-access errors. For an upgrade, verify that
-one grouped PR changes all four composite pins to the same new full SHA. Count
+one grouped PR changes all used shared action pins to the same new full SHA. Count
 workflow runs per PR head commit and event, accounting for run attempts separately;
 multiple jobs in one CI run are not duplicate CI runs. Check branch pushes as well
 as `pull_request` events before declaring the duplicate-trigger criterion met.
@@ -63,7 +74,7 @@ zero-minute day. Billing may arrive late: recheck completed days and distinguish
 missing/inaccessible data from confirmed zero usage. Do not publish the whole
 organization report when only one app's rows are needed.
 
-## Queue impact and handoff
+## Nonblocking queue study and handoff
 
 Use comparable before/after UTC windows and report sample counts per app, workflow
 and runner. Subtract run creation from the first relevant job's start for an
@@ -72,9 +83,8 @@ earlier work; do not describe it as pure runner queue time. Compare equivalent
 entry jobs and record concurrent load, cancelled runs and outstanding runs. Do not
 infer a capacity improvement from one batch or mix hosted and self-hosted samples.
 
-Prepare a follow-up changelog locally. Publishing still requires the owner's
-explicit go-ahead, required local checks, and hosted checks on the exact candidate
-as described in [Contributing](../CONTRIBUTING.md). After publication, confirm
+Publish only within the authorized release scope after required local and exact-candidate
+hosted checks, following [Contributing](../CONTRIBUTING.md). After publication, confirm
 assets, the stable major tag and a real grouped upgrade PR before closing tracking.
 Keep the rollback archive available until all acceptance evidence is complete.
 The owner archives it; if rollback is still wanted, first confirm that an archived

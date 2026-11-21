@@ -1,0 +1,51 @@
+{
+  "app_id": "1234567890 # CHANGE ME: app_id",
+  "bundle_id": "com.example.app # CHANGE ME: bundle_id",
+  "team_id": "ABCDE12345 # CHANGE ME: team_id",
+  "internal_group": "00000000-0000-0000-0000-000000000000 # CHANGE ME: internal_group",
+  "baseline": "0000000000000000000000000000000000000000 # CHANGE ME: baseline",
+  "timezone": "America/New_York # CHANGE ME: timezone",
+  "xcode": "26.6 # CHANGE ME: xcode",
+  "ios": {
+    "project": "iosApp/iosApp.xcodeproj # CHANGE ME: ios.project",
+    "scheme": "iosApp # CHANGE ME: ios.scheme",
+    "target": "iosApp # CHANGE ME: ios.target",
+    "name": "ExampleApp # CHANGE ME: ios.name"
+  },
+  "verification": {
+    "commands": [
+      [
+        "./gradlew",
+        "--no-daemon",
+        "--console=plain",
+        "detekt # CHANGE ME: match your app and installed simulator",
+        ":composeApp:jvmTest # CHANGE ME: match your app and installed simulator",
+        "--rerun"
+      ],
+      [
+        "./gradlew",
+        "--no-daemon",
+        "--console=plain",
+        ":composeApp:iosSimulatorArm64Test # CHANGE ME: match your app and installed simulator",
+        "--rerun"
+      ]
+    ],
+    "test_reports": [
+      "composeApp/build/test-results/jvmTest # CHANGE ME: paths produced by your commands",
+      "composeApp/build/test-results/iosSimulatorArm64Test # CHANGE ME: paths produced by your commands"
+    ],
+    "evidence": [
+      "composeApp/build/reports # CHANGE ME: paths produced by your commands",
+      "build/reports/detekt # CHANGE ME: paths produced by your commands"
+    ]
+  },
+  "tester_notes": "Check sign-in, the main flows, purchases and restore, small screens and large text. Report regressions with the build number. # CHANGE ME: tester_notes",
+  "release_notes": {
+    "directory": "release-notes.d",
+    "fallback": "Maintenance improvements to Example App. # CHANGE ME: approved public release-note fallback"
+  },
+  "android_packages": [
+    "platforms;android-37.0 # CHANGE ME: Android SDK packages required by your project",
+    "build-tools;36.0.0 # CHANGE ME: Android SDK packages required by your project"
+  ]
+}

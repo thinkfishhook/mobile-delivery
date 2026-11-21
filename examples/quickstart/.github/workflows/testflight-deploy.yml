@@ -1,0 +1,41 @@
+name: TestFlight Deploy
+on:
+  workflow_run:
+    workflows: [Continuous Integration]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: macos-26 # CHANGE ME: hosted macOS or existing self-hosted labels
+    timeout-minutes: 330
+    environment: { name: ios-delivery, deployment: false }
+    permissions: { contents: write, actions: read, issues: write }
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: thinkfishhook/mobile-delivery/testflight-deploy@7366be5a1158e54da925a79caab3dec5fda6df11 # reviewed implementation candidate; replace with stable v1.1.0 SHA after release
+        with:
+          branch: main
+          ci-workflow: ci.yml
+          delivery-enabled: ${{ vars.IOS_DELIVERY_ENABLED }}
+          asc-key-id: ${{ secrets.ASC_KEY_ID }}
+          asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          asc-private-key: ${{ secrets.ASC_PRIVATE_KEY }}
+          receipt-token: ${{ secrets.IOS_RECEIPT_TOKEN }}
+          distribution-p12: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          distribution-p12-password: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
+          provisioning-profile: ${{ secrets.IOS_PROFILE_BASE64 }}
+  report:
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: { contents: read, actions: read, issues: write }
+    concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: thinkfishhook/mobile-delivery/report-failure@7366be5a1158e54da925a79caab3dec5fda6df11 # reviewed implementation candidate; replace with stable v1.1.0 SHA after release
+        with:
+          role: deploy
+          operation-job: deploy
+          integration-branch: main

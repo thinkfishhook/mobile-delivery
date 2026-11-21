@@ -9,7 +9,8 @@ cp -R /path/to/mobile-delivery/examples/quickstart/. /path/to/app/
 Review existing files first: copying can replace workflows, a delivery configuration or
 Dependabot rules with the same names. Merge any existing rules you need to retain.
 Repository secrets and switches are set separately by the main README's Quick start.
-The four actions pin v1.0.0 by its full commit SHA.
+The shared actions use one reviewed implementation candidate; replace it with the
+immutable stable v1.1.0 full SHA after publication.
 Keep deployment disabled until your verification run succeeds.
 
 Every app-specific edit is marked `# CHANGE ME`. In YAML these are comments. JSON does
@@ -28,20 +29,20 @@ example value, remove its marker. Never put secret values into these files.
 3. Match the native scheme and its shared `UnitTests`/`UITests` plans, or the KMP Gradle
    tasks and report directories. Every listed report must contain passing, unskipped
    tests. Select public fallback notes and tester instructions for your app.
-4. Set the same branch in all four workflows and the TestFlight push filter. Choose
+4. Set the same branch in all workflows and the CI, AI and dependency-PR branch filters. Choose
    hosted or self-hosted Mac labels for TestFlight and maintenance, then review the
    maintenance and App Store schedules. The App Store switch starts false.
 5. If builds need app secrets, add `build_environment` to the JSON with their names and
-   bind those existing secrets in `env:` on the TestFlight action step. No new combined
+   bind those existing secrets in `env:` on the CI/manual deployment action steps. No new combined
    secret or secret-presence JSON is required. Leave this out when unnecessary.
 
-The four actions already use one complete commit SHA with its version comment.
+All shared action references use one complete commit SHA with its version comment.
 Keep them together when upgrading with `# vX.Y.Z` comments. The overlay Dependabot
 `groups` rule matches `thinkfishhook/mobile-delivery*`; retain it when merging existing
 Dependabot configuration. Review the changelog and verify the app before integrating.
 
 Receipt tags pushed with `IOS_RECEIPT_TOKEN` trigger workflows. Every app workflow
-with `on: push` must use `branches:` filters (as TestFlight does) or exclude both tag
+with `on: push` must use `branches:` filters (as CI does) or exclude both tag
 namespaces with `tags-ignore: ['deploy/**', 'submit/**']`. Audit existing CI too.
 For CI that runs on PRs, use integration-branch pushes plus `pull_request` so Dependabot
 PR commits run CI once. If keeping all branch pushes, add
@@ -57,3 +58,10 @@ it to `stale.yml`. Never auto-close `testflight-hold` issues to lift a release h
 
 Finish with the main README: configure `ios-delivery`, add its secrets, set both switches
 to `false`, and push to get the first green verification run before enabling delivery.
+
+Use the separate CI, standalone deployment and independent AI workflows together. Remove
+the former all-in-one push trigger in the same migration. Do not add a main-only manual
+branch guard or artifact inputs. Configure one supported AI_REVIEW_MODEL and the selected
+repository provider secret. Run `mobile-delivery callerChecks` from the app checkout.
+See `docs/upgrade-v1.1.md` in the tool for the packaged local hook, safe rollback and exact
+live acceptance evidence; copying files alone does not establish a successful deployment.
