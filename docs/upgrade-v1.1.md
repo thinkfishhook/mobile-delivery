@@ -3,10 +3,12 @@
 v1.1.0 is an additive minor release. The existing all-in-one `testflight`, maintenance,
 release, rollout, schema-1 package and receipt readers remain supported. New CI and
 standalone deployment reserve schema-2 package identities. Private app evidence belongs
-in each app's migration ticket. Stable [v1.1.0](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.0) is
-`d0b62a1a9b8e3f531c0ffbb97629a452cffc0268`. Use this full SHA consistently for every
-shared action. The tagged source retains explicitly labelled implementation-candidate
-examples; the updated trunk examples pin the actual stable release commit.
+in each app's migration ticket. The v1.1.1 permission correction is being prepared;
+its compatible reviewed implementation is `5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a`. Candidate action examples pin that
+implementation until immutable stable publication supplies the final v1.1.1 full SHA.
+Use one compatible pin consistently. The previous stable v1.1.0 validator rejects the
+new Checks-read grant, so its action pin and downloaded CLI must not be paired with
+these corrected callers. Package/identity readers remain compatible across this patch.
 
 ## Prepare and integrate
 
@@ -42,7 +44,10 @@ examples; the updated trunk examples pin the actual stable release commit.
    events. Observe a normal update and count each expected workflow/event/attempt once.
    Multiple jobs are not duplicate runs. Keep the `thinkfishhook/mobile-delivery*`
    Dependabot group so every used action path advances coherently.
-6. Validate with the released CLI from the app root:
+6. Validate with the CLI from the same compatible revision as the action pins. While
+   v1.1.1 is unreleased, build the reviewed candidate `5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a` with `./gradlew installDist`;
+   after publication use the v1.1.1 release zip. Do not use the older v1.1.0 CLI for the
+   corrected reporter permissions. From the app root:
 
    ```sh
    /absolute/mobile-delivery/bin/mobile-delivery callerChecks
