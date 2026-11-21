@@ -9,7 +9,7 @@ jobs:
     permissions: { contents: read, issues: write }
     concurrency: { group: mobile-delivery-ai-review, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/ai-review@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0 baseline; replace all pins with v1.1.1 before use (unreleased permission patch)
+      - uses: thinkfishhook/mobile-delivery/ai-review@5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
         with:
           branch: trunk
           provider: codex

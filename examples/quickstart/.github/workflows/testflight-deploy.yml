@@ -14,7 +14,7 @@ jobs:
     permissions: { contents: write, actions: read, issues: write }
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/testflight-deploy@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0 baseline; replace all pins with v1.1.1 before use (unreleased permission patch)
+      - uses: thinkfishhook/mobile-delivery/testflight-deploy@5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
         with:
           branch: main
           ci-workflow: ci.yml
@@ -34,7 +34,7 @@ jobs:
     permissions: { contents: read, actions: read, checks: read, issues: write }
     concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/report-failure@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0 baseline; replace all pins with v1.1.1 before use (unreleased permission patch)
+      - uses: thinkfishhook/mobile-delivery/report-failure@5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
         with:
           role: deploy
           operation-job: deploy

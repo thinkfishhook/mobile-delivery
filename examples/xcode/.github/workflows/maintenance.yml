@@ -17,7 +17,7 @@ jobs:
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
     permissions: { contents: read, actions: read, issues: write }
     steps:
-      - uses: thinkfishhook/mobile-delivery/maintenance@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0 baseline; replace all pins with v1.1.1 before use (unreleased permission patch)
+      - uses: thinkfishhook/mobile-delivery/maintenance@5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
         with:
           branch: main # CHANGE ME: same delivery branch
           dispatch: ${{ toJSON(inputs) }}
