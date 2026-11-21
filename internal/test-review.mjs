@@ -237,3 +237,11 @@ test('composed relative hooks continue to resolve from the invoking checkout', a
   execFileSync(join(installed, 'pre-push'), ['origin', 'url'], { cwd: other, input: '' });
   assert.equal(await readFile(join(other, 'prior-kind'), 'utf8'), 'second');
 })));
+
+test('Codex retains the MCP transport host while disabling model code execution', () => {
+  const command = providerCommand('codex', { model: 'fixture-model', directory: '/isolated', schema: '/schema', output: '/output', server: '/trusted/context.mjs', repository: '/repo', tips: ['a'.repeat(40)], node: '/trusted/node' });
+  const disabled = command.flatMap((value, i) => value === '--disable' ? [command[i + 1]] : []);
+  assert.ok(!disabled.includes('code_mode_host'), 'The CLI MCP transport host must stay available');
+  for (const feature of ['shell_tool', 'code_mode', 'js_repl', 'hooks', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'multi_agent']) assert.ok(disabled.includes(feature), feature);
+  assert.ok(command.includes('mcp_servers.review_context.required=true'));
+});

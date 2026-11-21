@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateReview, reviewerEnvironment, schemaPath } from './core.mjs';
 
-export const codexDisabledFeatures = ['shell_tool', 'hooks', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'multi_agent', 'js_repl', 'code_mode', 'code_mode_host'];
+// Keep the CLI transport host: stdio MCP reads need it. Model code execution stays disabled.
+export const codexDisabledFeatures = ['shell_tool', 'hooks', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'multi_agent', 'js_repl', 'code_mode'];
 
 export function providerCommand(provider, options) {
   const { model, directory, schema, output, server, repository, tips, node, mcpConfig } = options;

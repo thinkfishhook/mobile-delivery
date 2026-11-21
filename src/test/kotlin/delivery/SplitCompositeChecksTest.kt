@@ -52,7 +52,7 @@ class SplitCompositeChecksTest {
               report:
                 if: always()
                 needs: deploy
-                permissions: { contents: read, actions: read, issues: write }
+                permissions: { contents: read, actions: read, checks: read, issues: write }
                 concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
                 steps:
                   - uses: owner/tool/report-failure@${"a".repeat(40)}

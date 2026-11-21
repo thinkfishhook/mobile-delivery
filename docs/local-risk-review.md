@@ -83,3 +83,9 @@ remain incomplete and actionable. Cached incomplete results are retried unless a
 fixtures. Tests make no inference calls and do not use live provider/GitHub/Apple credentials.
 Hosted review reuses the contract but publishes asynchronous issues; its findings and
 operation failures must never gate CI or automatic/manual deployment.
+
+The CLI's `code_mode_host` transport stays enabled so the two trusted MCP source tools
+remain available. This does not enable model code execution: `code_mode`, shell, JS,
+browser, image, plugins and subagent tools stay disabled. A real-client integration check
+confirmed successful immutable list/read calls; disabling the transport previously left
+review incomplete. Upgrade the hook runtime as well as caller pins when taking this fix.

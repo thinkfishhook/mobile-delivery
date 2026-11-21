@@ -33,7 +33,7 @@ class ReportingChecksTest {
                 if: always()
                 needs: operation
                 runs-on: ubuntu-latest
-                permissions: { contents: read, actions: read, issues: write }
+                permissions: { contents: read, actions: read, checks: read, issues: write }
                 concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
                 steps:
                   - uses: owner/tool/report-failure@${"a".repeat(40)}
@@ -47,6 +47,8 @@ class ReportingChecksTest {
                 valid.replace("cancel-in-progress: false", "cancel-in-progress: true"),
                 valid.replace("if: always()", "if: failure()"),
                 valid.replace("actions: read", "actions: write"),
+                valid.replace("checks: read, ", ""),
+                valid.replace("checks: read", "checks: write"),
                 valid.replace("needs: operation", "needs: missing"),
                 valid.replace(
                     "steps:\n      - uses:",
