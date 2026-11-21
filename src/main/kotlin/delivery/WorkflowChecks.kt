@@ -13,6 +13,8 @@ class WorkflowChecks {
             require(doc["env"] == null) { "$file: credentials belong to steps" }
             yamlMapping(doc["jobs"]).forEach { (name, value) ->
                 val job = yamlMapping(value)
+                if (workflowSteps(job).any { reportingAction(it["uses"]) })
+                    validateReportingJob(doc, name.toString())
                 require(job["env"] == null) { "$file $name: credentials belong to steps" }
                 workflowSteps(job).forEach { step ->
                     step["uses"]?.toString()?.let { action ->
@@ -30,7 +32,11 @@ class WorkflowChecks {
                                 )
                         if (localComposite)
                             CompositeChecks().validateCaller(root, file, name.toString(), action)
-                        require(localComposite || Regex("[\\w./-]+@[a-f0-9]{40}").matches(action)) {
+                        require(
+                            localComposite ||
+                                action == "./report-failure" ||
+                                Regex("[\\w./-]+@[a-f0-9]{40}").matches(action)
+                        ) {
                             "$file: $action is not pinned to a full commit SHA"
                         }
                         if (action.startsWith("actions/checkout@")) {

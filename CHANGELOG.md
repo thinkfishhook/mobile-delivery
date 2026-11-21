@@ -7,6 +7,8 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Independent workflow-boundary CI/TestFlight incident reporting, bounded named-test
+  diagnostics, serialized deduplication, exact credential recovery and preserved human triage.
 - Additive `ci` and `testflight-deploy` entry points: frozen-source verification and signed
   preparation, exact-package automatic upload, and manual branch build/upload without CI.
   Current-head admission, bounded retention and attempt-aware recovery preserve legacy callers.

@@ -58,6 +58,10 @@ internal fun runTask(
         try {
             SplitTool(root, DeliveryConfig.load(root, env), commands, env).run(mode)
         } catch (error: Exception) {
+            if (error is CredentialProblem)
+                annotate(Annotation("error", error.secret, "mobile-delivery-owner"))
+            if (error is InvalidReceiptName)
+                annotate(Annotation("error", "RECEIPT_RECORD", "mobile-delivery-owner"))
             writeRunSummary(
                 root,
                 env,

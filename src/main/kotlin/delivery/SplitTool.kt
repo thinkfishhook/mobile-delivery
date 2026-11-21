@@ -79,7 +79,16 @@ class SplitTool(
                 "Selected source must resolve to its exact commit"
             }
         val apple = Asc(config, commands, env)
-        val tags = GitHubReceiptTags(github)
+        val tags =
+            GitHubReceiptTags(github).apply {
+                onCredentialSuccess = {
+                    resolveCredentialIncidents(setOf("IOS_RECEIPT_TOKEN"), config, commands, env)
+                }
+                onCredentialProblem = { problem ->
+                    annotate(Annotation("error", problem.secret, "mobile-delivery-owner"))
+                    annotate(Annotation("warning", problem.message!!))
+                }
+            }
         val artifacts = GitHubBuildArtifacts(github, env.getValue("GITHUB_RUN_ID"))
         val store = GitHubPreparationStore(github)
         val packages = PreparedPackages(artifacts, config, commands, env)
@@ -90,7 +99,15 @@ class SplitTool(
                 source,
                 Verification(config, commands, env),
                 PreparationReservations(store) {
-                    occupiedPreparationNumbers(apple, tags, artifacts)
+                    occupiedPreparationNumbers(apple, tags, artifacts).also {
+                        annotate(
+                            Annotation(
+                                "notice",
+                                "RECEIPT_RECORD",
+                                "mobile-delivery-credential-used",
+                            )
+                        )
+                    }
                 },
                 store,
                 packages::download,
@@ -162,8 +179,25 @@ class SplitTool(
                         source,
                         Verification(config, commands, env),
                         env,
+                        onReceipted = { receipt ->
+                            if (automatic && receipt.sha == github.currentBranchTip(branch))
+                                RedStreaks(
+                                        github,
+                                        config.incidentMarker,
+                                        app = config.bundleId,
+                                        secretValues = config.buildEnvironment.mapNotNull(env::get),
+                                    )
+                                    .closeDelivered(
+                                        receipt.sha,
+                                        "${receipt.version}/${receipt.number}",
+                                    )
+                        },
                     )
                 try {
+                    requireReceiptNames("deploy/testflight/", tags.names("deploy/testflight/"))
+                    annotate(
+                        Annotation("notice", "RECEIPT_RECORD", "mobile-delivery-credential-used")
+                    )
                     val receipt =
                         beta.publishPrepared(record, destination, packages::download) {
                             if (
@@ -187,6 +221,7 @@ class SplitTool(
                         "Internal TestFlight available ${receipt.version}/${receipt.number}; IPA ${manifest.ipa.sha256}; package produced by ${manifest.workflow}",
                         request,
                     )
+                    annotate(Annotation("notice", receipt.sha, "mobile-delivery-confirmed"))
                 } catch (_: SplitSuperseded) {
                     summary("skipped", "Superseded immediately before upload", request)
                 }

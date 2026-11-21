@@ -34,6 +34,7 @@ internal fun publishCredentialProblem(
     env: Map<String, String>,
 ): List<String> {
     val message = problem.message!!
+    annotate(Annotation("error", problem.secret, "mobile-delivery-owner"))
     annotate(Annotation("error", message))
     val repairErrors = mutableListOf<String>()
     try {
@@ -63,6 +64,7 @@ internal fun resolveCredentialIncidents(
     commands: Commands,
     env: Map<String, String>,
 ) {
+    secrets.forEach { annotate(Annotation("notice", it, "mobile-delivery-credential-used")) }
     if (env["GH_TOKEN"].isNullOrBlank() || env["GITHUB_REPOSITORY"].isNullOrBlank()) return
     try {
         val github = GitHub(env.getValue("GITHUB_REPOSITORY"), commands, env)

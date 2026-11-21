@@ -82,3 +82,11 @@ listOf("format", "checkFormat").forEach { taskName ->
 }
 
 tasks.check { dependsOn("checkFormat") }
+
+val reporterTests =
+    tasks.register<Exec>("reporterTests") {
+        group = "verification"
+        commandLine("node", "--test", "internal/test-report-failure.mjs")
+    }
+
+tasks.check { dependsOn(reporterTests) }

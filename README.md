@@ -9,6 +9,8 @@ Your repository owns the jobs, runners and secrets; each composite owns its deli
 The unreleased additive `ci` and `testflight-deploy` actions separate preparation from
 upload and support manual branch delivery. See the [split delivery contract](docs/split-delivery.md)
 for event, credential, recovery and migration boundaries.
+Split callers also use the independent [failure reporter](docs/failure-reporting.md),
+which records early setup failures without depending on the delivery engine.
 
 ## Quick start
 
