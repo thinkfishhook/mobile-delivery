@@ -42,3 +42,15 @@ unknown formats, source movement, absent findings or contradictory state fail in
 It checks source/state again after collecting comments. The format is observed behavior,
 not a guaranteed public API. This reader alone does not publish issues or establish full
 landed-range coverage, automatic authentication or consumer acceptance.
+
+## Landed-range planning
+
+`review/connector-plan.mjs` plans fast-forward integration pushes before any GitHub write.
+It includes the combined landed diff and every added commit's first-parent diff, including
+merged side-branch commits and changes reverted later in the push. Identical views are
+requested once; tree-identical views are recorded explicitly as unchanged. A single-commit
+push therefore needs only one PR. The full existing immutable Git context bounds still
+apply, and more than 32 changed views is explicitly incomplete before request creation.
+Initial, deleted, rewritten, shallow or unavailable histories fail visibly; no subset is
+quietly accepted. The request prototype still accepts only one parent/commit pair until
+this planner and an aggregate-range transport are integrated and validated.
