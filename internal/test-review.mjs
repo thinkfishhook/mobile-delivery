@@ -75,7 +75,7 @@ test('both providers receive only the strict contract and read-only context tool
   for (const key of ['ANTHROPIC_API_KEY', 'GH_TOKEN', 'ASC_PRIVATE_KEY', 'IOS_PROFILE_BASE64', 'GIT_DIR']) assert.equal(env[key], undefined);
   const options = { model: 'configured-model', directory: '/isolated', schema: fileURLToPath(new URL('../review/schema.json', import.meta.url)), output: '/result.json', server: '/trusted/context.mjs', repository: '/source', tips: ['a'.repeat(40)], node: '/usr/bin/node', mcpConfig: '/context.json' };
   const codex = providerCommand('codex', options);
-  assert.ok(codex.includes('read-only')); assert.ok(codex.includes('shell_tool')); assert.ok(codex.includes('--ignore-user-config'));
+  assert.ok(codex.includes('read-only')); assert.ok(codex.includes('shell_tool')); assert.ok(codex.includes('view_image')); assert.ok(codex.includes('--ignore-user-config'));
   const claude = providerCommand('claude', options);
   assert.ok(claude.includes('--restricted')); assert.ok(claude.includes('--strict-mcp-config'));
   assert.deepEqual(normalizeProvider('codex', JSON.stringify(clean())), clean());

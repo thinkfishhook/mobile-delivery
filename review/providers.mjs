@@ -9,7 +9,7 @@ export function providerCommand(provider, options) {
   const { model, directory, schema, output, server, repository, tips, node, mcpConfig } = options;
   if (!/^[A-Za-z0-9._:/-]{1,128}$/.test(model)) throw Error('Configure an explicit current provider model, without shell expressions');
   if (provider === 'codex') {
-    const disabled = ['shell_tool', 'hooks', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'multi_agent', 'js_repl', 'code_mode', 'code_mode_host'];
+    const disabled = ['shell_tool', 'hooks', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'multi_agent', 'js_repl', 'code_mode', 'code_mode_host'];
     return ['codex', 'exec', '--model', model, '--ephemeral', '--ignore-user-config', '--ignore-rules', '--sandbox', 'read-only', '--skip-git-repo-check', '--cd', directory, ...disabled.flatMap(feature => ['--disable', feature]), '-c', 'web_search="disabled"', '-c', 'mcp_servers.review_context.required=true', '-c', `mcp_servers.review_context.command=${JSON.stringify(node)}`, '-c', `mcp_servers.review_context.args=${JSON.stringify([server, repository, JSON.stringify(tips)])}`, '--output-schema', schema, '--output-last-message', output, '-'];
   }
   if (provider === 'claude') return ['claude', '-p', '--model', model, '--bare', '--restricted', '--strict-mcp-config', '--mcp-config', mcpConfig, '--tools', '', '--allowedTools', 'mcp__review_context__*', '--permission-mode', 'dontAsk', '--permission-prompts', 'none', '--disable-slash-commands', '--no-chrome', '--no-session-persistence', '--output-format', 'json', '--json-schema', readFileSync(schema, 'utf8')];
