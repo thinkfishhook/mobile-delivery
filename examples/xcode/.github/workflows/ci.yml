@@ -10,7 +10,7 @@ jobs:
     permissions: { contents: write, actions: write, issues: write }
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/ci@5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
+      - uses: thinkfishhook/mobile-delivery/ci@2d03ee4e318219a69ef1a8899a8d064138779b58 # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
         with:
           branch: main
           ci-workflow: ci.yml
@@ -29,7 +29,7 @@ jobs:
     permissions: { contents: read, actions: read, checks: read, issues: write }
     concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/report-failure@5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
+      - uses: thinkfishhook/mobile-delivery/report-failure@2d03ee4e318219a69ef1a8899a8d064138779b58 # reviewed v1.1.1 implementation candidate; replace with stable SHA after publication
         with:
           role: ci
           operation-job: ci

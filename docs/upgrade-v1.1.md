@@ -4,7 +4,7 @@ v1.1.0 is an additive minor release. The existing all-in-one `testflight`, maint
 release, rollout, schema-1 package and receipt readers remain supported. New CI and
 standalone deployment reserve schema-2 package identities. Private app evidence belongs
 in each app's migration ticket. The v1.1.1 permission correction is being prepared;
-its compatible reviewed implementation is `5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a`. Candidate action examples pin that
+its compatible reviewed implementation is `2d03ee4e318219a69ef1a8899a8d064138779b58`. Candidate action examples pin that
 implementation until immutable stable publication supplies the final v1.1.1 full SHA.
 Use one compatible pin consistently. The previous stable v1.1.0 validator rejects the
 new Checks-read grant, so its action pin and downloaded CLI must not be paired with
@@ -45,7 +45,7 @@ these corrected callers. Package/identity readers remain compatible across this 
    Multiple jobs are not duplicate runs. Keep the `thinkfishhook/mobile-delivery*`
    Dependabot group so every used action path advances coherently.
 6. Validate with the CLI from the same compatible revision as the action pins. While
-   v1.1.1 is unreleased, build the reviewed candidate `5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a` with `./gradlew installDist`;
+   v1.1.1 is unreleased, build the reviewed candidate `2d03ee4e318219a69ef1a8899a8d064138779b58` with `./gradlew installDist`;
    after publication use the v1.1.1 release zip. Do not use the older v1.1.0 CLI for the
    corrected reporter permissions. From the app root:
 

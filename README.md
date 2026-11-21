@@ -11,7 +11,7 @@ failures never gate deployment. Local pre-push risk review composes existing hoo
 ## Quick start
 
 The reporter permission correction for v1.1.1 is being prepared. Candidate templates
-pin reviewed implementation `5abb5ee2bb1e24428cdac9e0ecd1659abd092f3a` with Checks read; stable publication will replace
+pin reviewed implementation `2d03ee4e318219a69ef1a8899a8d064138779b58` with Checks read; stable publication will replace
 that candidate pin with the immutable patch release SHA. The v1.1.0 pin below identifies
 the previous baseline, whose caller validator rejects the corrected permission set.
 
