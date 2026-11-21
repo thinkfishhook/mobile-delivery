@@ -11,7 +11,7 @@ function fixture(){
   if(path==='git/refs'){refs.set(body.ref.replace('refs/',''),body.sha);return {};}
   if(path.startsWith('pulls?'))return pulls;
   if(path==='pulls'){const pr={number:1,state:'open',html_url:'https://github.com/owner/repo/pull/1',body:body.body,head:{sha:after,ref:body.head},base:{sha:before,ref:body.base}};pulls.push(pr);return pr;}
-  if(path==='issues/1/comments'&&!body)return comments;
+  if(path.startsWith('issues/1/comments')&&!body)return comments.slice(0,path.includes('per_page=100')?100:30);
   if(path==='issues/1/comments'&&body){comments.push({body:body.body,user:{login:'github-actions[bot]'}});return {};}
   throw Error(`Unexpected ${path}`);
  };
@@ -39,4 +39,16 @@ test('a moved owned branch is preserved without a force update',async()=>{
 test('deliberately closed review PRs remain closed and are not duplicated',async()=>{
  const f=fixture(),input={api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1'};
  await requestConnectorReview(input);f.pulls[0].state='closed';await assert.rejects(requestConnectorReview(input),/human closed/);assert.equal(f.pulls.length,1);assert.equal(f.comments.length,1);
+});
+
+test('an existing bot trigger beyond GitHub default pagination is not duplicated',async()=>{
+ const f=fixture(),input={api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1'};
+ await requestConnectorReview(input);const trigger=f.comments.pop();
+ for(let i=0;i<80;i++)f.comments.push({body:'Human context '+i,user:{login:'human'}});
+ f.comments.push(trigger);await requestConnectorReview(input);assert.equal(f.comments.length,81);
+});
+test('lost ref and PR create responses are read back without duplicate mutations',async()=>{
+ const f=fixture(),lost=new Set();
+ const api=async(path,body,method)=>{const result=await f.api(path,body,method);if(body&&['git/refs','pulls'].includes(path)&&!lost.has(path)){lost.add(path);throw Error('response lost');}return result;};
+ await requestConnectorReview({api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1'});assert.equal(f.refs.size,2);assert.equal(f.pulls.length,1);assert.equal(f.comments.length,1);
 });

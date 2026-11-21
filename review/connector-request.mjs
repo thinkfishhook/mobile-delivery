@@ -31,7 +31,7 @@ export async function requestConnectorReview({api,repository,before,after,runUrl
  }
  check(pr.body?.includes(marker)&&pr.head?.sha===after&&pr.base?.sha===before&&pr.head?.ref===head&&pr.base?.ref===base,'Review PR does not match its exact owned source');
  check(pr.state==='open','A human closed this review PR; preserve that decision');
- const comments=await api(`issues/${pr.number}/comments`);
+ const comments=await api(`issues/${pr.number}/comments?per_page=100`);
  check(Array.isArray(comments)&&comments.length<100,'Review trigger inventory is incomplete');
  if(!comments.some(c=>c.body==='@codex review'&&c.user?.login==='github-actions[bot]'))await api(`issues/${pr.number}/comments`,{body:'@codex review'});
  return {number:pr.number,url:pr.html_url,before,after,base,head,requested:true,complete:false};
