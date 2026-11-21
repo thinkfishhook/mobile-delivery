@@ -2,31 +2,37 @@
 
 mobile-delivery v1 serves Fish Hook’s portfolio from the public
 [`thinkfishhook/mobile-delivery`](https://github.com/thinkfishhook/mobile-delivery) repository.
-Four GitHub Actions verify an iOS app, deliver it to TestFlight, reconcile delivery state,
-and manage App Store releases. They support native Xcode and Kotlin Multiplatform apps.
-Your repository owns the jobs, runners and secrets; each composite owns its delivery steps.
-
-The unreleased additive `ci` and `testflight-deploy` actions separate preparation from
-upload and support manual branch delivery. See the [split delivery contract](docs/split-delivery.md)
-for event, credential, recovery and migration boundaries.
-Split callers also use the independent [failure reporter](docs/failure-reporting.md),
-which records early setup failures without depending on the delivery engine.
-The shared [local risk review](docs/local-risk-review.md) composes existing pre-push hooks
-and reviews exact outgoing refs with Claude or Codex before a push.
-The separate [hosted review](docs/hosted-review.md) publishes landed-push findings as issues
-and keeps review failures outside the CI/deployment gate.
+The shared actions verify native Xcode and Kotlin Multiplatform apps, prepare signed
+packages, deliver them to TestFlight and manage release recovery. Your repository owns
+runners, configuration and credentials. The default copy-in workflows separate **Continuous
+Integration**, **TestFlight Deploy** and **AI Code Review**. Hosted findings and provider
+failures never gate deployment. Local pre-push risk review composes existing hooks.
 
 ## Quick start
 
-Start with delivery disabled. A push will build and test your app and retain its evidence.
-It will not upload a build. The overlay pins all four actions to v1.0.0:
+The v1.1 examples currently identify their reviewed implementation candidate explicitly;
+replace that pin with the immutable stable v1.1.0 full SHA after publication. Start with
+`IOS_DELIVERY_ENABLED=false` and `IOS_APPSTORE_ENABLED=false`. CI still verifies and retains
+evidence, without preparing or uploading a package. Follow the
+[upgrade and acceptance guide](docs/upgrade-v1.1.md) for existing apps.
 
-```yaml
-- uses: thinkfishhook/mobile-delivery/testflight@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
-- uses: thinkfishhook/mobile-delivery/maintenance@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
-- uses: thinkfishhook/mobile-delivery/app-store-release@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
-- uses: thinkfishhook/mobile-delivery/app-store-rollout@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
-```
+| Entry point | Responsibility |
+| --- | --- |
+| `ci` | Verify frozen integration source once; sign/export and retain a package when enabled |
+| `testflight-deploy` | Upload the exact successful CI package; manual branch build/upload without tests |
+| `ai-review` | Independently review exact landed pushes and publish findings as issues |
+| `report-failure` | Report workflow-boundary failures and credential recovery without engine setup |
+| `verify` | Read-only configured deterministic checks and retained evidence |
+| `select-xcode` | Read-only configured Xcode selection |
+| `testflight` | Supported legacy all-in-one verification/build/upload |
+| `maintenance` | Reconcile delivery, audit, preflight and diagnose signing |
+| `app-store-release` | Submit an eligible build under the independent App Store switch |
+| `app-store-rollout` | Manually pause, resume or release to all in its own queue |
+
+The marked [quickstart overlay](examples/quickstart) defaults to native Xcode on `main`.
+Complete neutral callers are also provided for [native Xcode](examples/xcode) on `main`
+and [KMP](examples/kmp) on `trunk`. The [legacy overlay](examples/legacy) preserves the
+all-in-one shape during migration. Keep every used shared action at one full SHA.
 
 You need an existing iOS app with passing automated tests, an App Store Connect API key,
 an Apple distribution certificate exported as a password-protected P12, an App Store
@@ -47,7 +53,7 @@ manages its own JDK 21. Install and authenticate the GitHub CLI locally (`gh aut
    Xcode; for KMP first copy `.github/delivery.kmp.example.json` over `.github/delivery.json`.
    JSON markers are inside placeholder strings: replace the whole value, including the
    marker. Choose the branch, app IDs, baseline commit, installed Xcode/simulator, test
-   commands and public notes. The four action references are already pinned together.
+   commands and public notes. Keep all used shared action references pinned together.
 
 2. **Create the environment and disable both deployment switches.** Run from the app
    checkout. Give a self-hosted runner group access to the app if applicable. No separate
@@ -80,11 +86,16 @@ manages its own JDK 21. Install and authenticate the GitHub CLI locally (`gh aut
    Workflows read/write permissions for receipt tags. Keep its expiry recorded. The
    default job token handles ordinary API reads and issue updates. If builds use existing
    app secrets, list their names in `build_environment` and bind them as `env:` on the
-   TestFlight composite step; see [named build values](#secrets-and-variables).
+   CI/manual deployment composite step; see [named build values](#secrets-and-variables).
    Disabled verification does not require deployment secrets, so you may defer them
    until enabling TestFlight; any declared app build values are still required.
 
-4. **Commit and push to the configured delivery branch.** Open its **TestFlight** run.
+4. **Configure hosted and local review.** Set a supported `AI_REVIEW_MODEL` repository
+   variable and `OPENAI_API_KEY` repository secret (or select Claude and its named secret).
+   Follow [hosted review](docs/hosted-review.md) and [local risk review](docs/local-risk-review.md).
+   Run the released CLI's `callerChecks` from the app root and pinned actionlint.
+
+5. **Commit and push to the configured delivery branch.** Open **Continuous Integration**.
    Success means the configured reports contain tests with no failures or skips and the
    evidence artifact is retained. No archive or upload should run. Missing Xcode or
    simulator errors mean the configured version needs an installed match; queue or
@@ -99,14 +110,17 @@ switch when you are ready for every eligible branch push to deliver an internal 
 ```sh
 gh workflow run maintenance.yml --ref main -f operation=verify-signing
 gh variable set IOS_DELIVERY_ENABLED --body true
-gh workflow run testflight.yml --ref main -f operation=deliver
+# The next normal integration push prepares a package and automatically deploys it.
+# For an intentional manual branch build, select its branch:
+gh workflow run testflight-deploy.yml --ref main
 ```
 
 Replace `main` with your configured branch and wait for the diagnostic to pass before
 turning on the switch. Confirm the build is available to the configured internal group,
 the package and evidence artifacts are retained, and a `deploy/testflight/…` receipt tag
 points to the delivered commit. Keep `IOS_APPSTORE_ENABLED=false` until the next section.
-Use the [retry procedure](#beta-delivery) for an interrupted or already attempted commit.
+Rerun the exact producer/deployment for interrupted processing or receipt recovery.
+Manual dispatch creates a new explicit operation. See [split delivery](docs/split-delivery.md).
 
 ## Enable the App Store
 
@@ -147,18 +161,18 @@ groups:
     patterns: ['thinkfishhook/mobile-delivery*']
 ```
 
-Keep all four composites at the same full commit SHA with a `# vX.Y.Z` comment
-(for example `# v1.0.0`). Read [CHANGELOG.md](CHANGELOG.md), review the grouped diff,
+Keep every used shared action at the same full commit SHA with its release comment. Read [CHANGELOG.md](CHANGELOG.md), review the grouped diff,
 and run your app's verification before integrating.
-The CLI zip on each release is for local bootstrap; composites install and cache their
+The CLI zip includes caller validation and the review hook runtime; composites install and cache their
 engine automatically.
 
 ## Push and pull request triggers
 
 Receipt tags are pushed with `IOS_RECEIPT_TOKEN`, so they **do trigger workflows**.
 Check every app workflow with `on: push`, including CI unrelated to delivery. Prefer
-branch filters, as in the TestFlight overlay. To run CI once for a Dependabot PR,
-run branch pushes only on your integration branch and use `pull_request` for PR commits:
+branch filters, as in the CI and AI overlays. For existing verification-only workflows, integration-only pushes plus PR events avoid
+branch/PR duplication. The split overlay instead keeps integration preparation separate
+from secret-free `dependency-ci.yml`, which handles only normal Dependabot PR events:
 
 ```yaml
 on:
@@ -185,7 +199,9 @@ prevent duplicate branch/PR runs. Do not add receipt tag triggers alongside bran
 | --- | --- |
 | Delivery branch | Each composite's `with: branch` and the TestFlight push filter |
 | Runner, environment, concurrency, timeout | Caller job |
-| TestFlight permissions | Caller job: `permissions: { contents: read, actions: write, issues: write }` |
+| CI permissions | `contents: write, actions: write, issues: write` |
+| Standalone deployment permissions | `contents: write, actions: read, issues: write` |
+| Legacy TestFlight permissions | `contents: read, actions: write, issues: write` |
 | Maintenance permissions | Caller job: `permissions: { contents: read, actions: read, issues: write }` |
 | App Store release permissions | Caller job: `permissions: { contents: read, actions: read, issues: read }` |
 | Rollout permissions | Caller job: `permissions: { contents: read }` |
@@ -202,7 +218,7 @@ TestFlight needs `actions: write` so a superseded run can cancel itself. The cal
 rejects missing or broader grants and prints the exact permissions line to paste.
 
 Caller filenames are up to each app. Queue discovery reads each run's exact workflow
-revision and recognizes the pinned composite. The four copy-in callers are in
+revision and recognizes the pinned composite. The default split callers are in
 [`examples/quickstart`](examples/quickstart).
 
 All delivery and release jobs in an app share `ios-delivery` with `queue: max` and
@@ -295,6 +311,8 @@ The asc release (and its checksums) ships with the tool in `src/main/resources/t
 | `IOS_DISTRIBUTION_P12_BASE64`, `IOS_DISTRIBUTION_P12_PASSWORD`, `IOS_PROFILE_BASE64` | environment secrets | the archive step and the signing diagnostic |
 | `IOS_RECEIPT_TOKEN` | environment secret | steps that write receipt tags and Releases |
 | Names declared in `build_environment` | existing app environment secrets | verification and the archive |
+| `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` | repository secret | selected independent hosted reviewer only |
+| `AI_REVIEW_MODEL` | repository variable | explicit supported hosted-review model |
 | `IOS_DELIVERY_ENABLED`, `IOS_APPSTORE_ENABLED` | repository or environment variables | in-job gates for delivery and App Store changes |
 
 Use existing individual secrets directly. For example, declare
@@ -315,9 +333,17 @@ from app subprocesses.
 
 ## Operation requirements
 
-Each caller job invokes one composite. The composite owns full-history checkout without
+Split CI, standalone deployment, hosted review and reporter boundaries are described in
+[the upgrade guide](docs/upgrade-v1.1.md). CI receives signing and Apple metadata inputs
+only during preparation; automatic deployment receives no signing values in its upload
+phase. Hosted provider keys reach only the chosen reviewer; reporters use only scoped
+GitHub tokens. The following operation table covers the retained legacy/maintenance and
+public-release entry points.
+
+Each operation job invokes one shared entry point; boundary reporters run separately. The composite owns full-history checkout without
 persisted credentials, cached engine installation, operation validation, evidence and
-summaries. Bind its named inputs and forward the dispatch form as `dispatch`.
+summaries. Bind its named inputs. Legacy/maintenance/release actions receive their dispatch form;
+standalone TestFlight uses the GitHub branch selector without an artifact form.
 The job supplies the runner, `ios-delivery` environment, queue and permissions.
 Validation reports configuration, operation, switch and missing-secret errors together;
 messages name the file or input to correct and never print secret values.
@@ -382,7 +408,10 @@ Two risks are accepted:
   if it already has it; that refusal counts as proof Apple has the build. A new number is
   taken only after Actions has deleted the bytes, 90 days later.
 
-## Beta delivery
+## Legacy all-in-one beta delivery
+
+This section describes the supported `testflight` action. New split callers use
+[CI preparation and standalone deployment](docs/split-delivery.md).
 
 A push to the delivery branch delivers that exact commit: verify → archive → retain → upload →
 distribute to the internal group → receipt tag. Intermediate commits are never built.

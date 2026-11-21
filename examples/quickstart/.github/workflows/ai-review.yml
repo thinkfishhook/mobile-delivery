@@ -1,0 +1,17 @@
+name: AI Code Review
+on:
+  push:
+    branches: [main]
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions: { contents: read, issues: write }
+    concurrency: { group: mobile-delivery-ai-review, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: thinkfishhook/mobile-delivery/ai-review@7366be5a1158e54da925a79caab3dec5fda6df11 # reviewed implementation candidate; replace with stable v1.1.0 SHA after release
+        with:
+          branch: main
+          provider: codex
+          model: ${{ vars.AI_REVIEW_MODEL }} # CHANGE ME: set an explicit supported model in repository variables
+          provider-api-key: ${{ secrets.OPENAI_API_KEY }}

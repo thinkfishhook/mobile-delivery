@@ -1,0 +1,29 @@
+name: Hold a TestFlight build
+description: Keep a bad TestFlight build, and every later build, out of the App Store until a fix lands.
+title: 'Hold: '
+labels: [testflight-hold]
+# Exempt holds from stale-issue automation; a bot close without a fix never lifts a hold.
+# See ../workflows/stale.yml.example for an optional stale policy.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        While this issue is open, no App Store release includes this build or any later build.
+        Close it with the fixing commit (`Fixes #<this issue>`) to release builds that contain
+        the fix. Close it by hand if it was a false alarm. A submission already in review or a
+        rollout already started is not changed; the next sweep tells you what to do.
+  - type: input
+    id: build
+    attributes:
+      label: Build
+      description: Version and build number, as 26.09.01/404.1 or as TestFlight shows it, 26.09.01 (404.1).
+      placeholder: 26.09.01/404.1
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Reason
+      description: What testers saw, with a link to the crash report or analytics insight.
+    validations:
+      required: true

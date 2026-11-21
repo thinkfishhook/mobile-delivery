@@ -1,6 +1,6 @@
 # Local pre-push risk review
 
-Use a pinned copy of this repository, Node 22+, Git and one authenticated provider CLI.
+Use a pinned copy of this repository or the released CLI distribution, Node 22+, Git and one authenticated provider CLI.
 The tested interfaces are Codex CLI 0.166.0 and Claude Code 2.1.325. Install/authenticate
 from the provider's official distribution. Codex uses its existing CLI login or a selected
 API key. Claude uses bare API mode with `ANTHROPIC_API_KEY`. Configure a currently supported
@@ -26,7 +26,8 @@ a newer hooks-path configuration. Restore with:
 node /absolute/pinned/mobile-delivery/review/cli.mjs uninstall
 ```
 
-Keep the pinned tool checkout available while installed. If replacing an older AI hook,
+The CLI zip bundles this runtime at `share/review/cli.mjs`; substitute that path in
+the commands above. Keep the pinned checkout or immutable distribution available while installed. If replacing an older AI hook,
 remove its paid-review stage while preserving its deterministic/Beads behavior before
 composing this hook. One shared provider session covers every ref in each push; a cache
 avoids paying again for an identical reviewed range. This tool introduces no PR requirement

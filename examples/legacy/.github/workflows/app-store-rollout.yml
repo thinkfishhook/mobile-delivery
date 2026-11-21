@@ -1,0 +1,29 @@
+name: App Store rollout
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Change the active phased rollout
+        type: choice
+        options: [pause, resume, release-to-all]
+        required: true
+      reason:
+        description: Why this rollout change is needed
+        type: string
+        required: true
+jobs:
+  rollout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ios-delivery
+    concurrency: { group: ios-rollout, queue: max, cancel-in-progress: false }
+    permissions: { contents: read }
+    steps:
+      - uses: thinkfishhook/mobile-delivery/app-store-rollout@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
+        with:
+          branch: main # CHANGE ME: same delivery branch
+          dispatch: ${{ toJSON(inputs) }}
+          appstore-enabled: ${{ vars.IOS_APPSTORE_ENABLED }}
+          asc-key-id: ${{ secrets.ASC_KEY_ID }}
+          asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+          asc-private-key: ${{ secrets.ASC_PRIVATE_KEY }}

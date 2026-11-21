@@ -5,6 +5,21 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-21
+
+### Upgrade contract
+
+- Additive minor release with ten public action entry points and retained legacy callers.
+  Native/main and KMP/trunk copy-in workflows split deterministic CI/preparation,
+  exact-package TestFlight deployment and non-gating hosted review. Dependabot PRs verify
+  once without deployment. All used shared actions must keep one coherent full SHA.
+- `callerChecks` validates app workflow boundaries without requiring tool source files.
+  The standalone CLI includes the local review runtime, schema, prompts and documentation.
+- Schema-1 packages and receipts remain readable. New schema-2 reservations must retain
+  compatible readers during rollback; v1.0.2 cannot read the new reservation format.
+  See `docs/upgrade-v1.1.md` for pinning, recovery and evidence requirements.
+
+
 ### Added
 
 - Independent hosted Codex/Claude review of exact landed ranges, actionable P1–P3 and urgent

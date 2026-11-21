@@ -15,11 +15,11 @@ jobs:
   rollout:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: ios-delivery
+    environment: { name: ios-delivery, deployment: false }
     concurrency: { group: ios-rollout, queue: max, cancel-in-progress: false }
     permissions: { contents: read }
     steps:
-      - uses: thinkfishhook/mobile-delivery/app-store-rollout@61b8c7c330c9b361dbf99be81d0e080f602d1bc5 # v1.0.0
+      - uses: thinkfishhook/mobile-delivery/app-store-rollout@7366be5a1158e54da925a79caab3dec5fda6df11 # reviewed implementation candidate; replace with stable v1.1.0 SHA after release
         with:
           branch: main # CHANGE ME: same delivery branch
           dispatch: ${{ toJSON(inputs) }}

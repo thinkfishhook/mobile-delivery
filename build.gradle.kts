@@ -21,7 +21,7 @@ application { mainClass.set("delivery.MainKt") }
 tasks.test {
     inputs.files(
         ".github/workflows",
-        "examples/quickstart",
+        "examples",
         "internal",
         "verify",
         "select-xcode",
@@ -109,3 +109,15 @@ val hostedReviewTests =
     }
 
 tasks.check { dependsOn(hostedReviewTests) }
+
+// Keep local review installation available in the immutable CLI release.
+distributions {
+    main {
+        contents {
+            from("review") { into("share/review") }
+            from("report-failure") { into("share/report-failure") }
+            from("docs") { into("share/docs") }
+            from("LICENSE")
+        }
+    }
+}

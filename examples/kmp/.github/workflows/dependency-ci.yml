@@ -1,0 +1,20 @@
+name: Dependency PR verification
+on:
+  pull_request:
+    branches: [trunk]
+    types: [opened, synchronize]
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-26 # CHANGE ME: hosted macOS or existing self-hosted labels
+    timeout-minutes: 330
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: thinkfishhook/mobile-delivery/verify@7366be5a1158e54da925a79caab3dec5fda6df11 # reviewed implementation candidate; replace with stable v1.1.0 SHA after release
