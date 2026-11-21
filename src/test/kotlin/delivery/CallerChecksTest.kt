@@ -26,6 +26,14 @@ class CallerChecksTest {
                     .trimIndent()
             path.writeText(valid)
             runTask(arrayOf("callerChecks"), root, emptyMap(), RecordingCommands())
+            val setup = root.resolve(".github/actions/setup/action.yml")
+            setup.parent.createDirectories()
+            setup.writeText(
+                """runs: { using: composite, steps: [{ uses: 'thinkfishhook/mobile-delivery/select-xcode@${"b".repeat(40)}' }] }"""
+            )
+            assertFails { CallerChecks().validate(root) }
+            setup.deleteExisting()
+
             for (changed in
                 listOf(
                     valid.replace("verify@${"a".repeat(40)}", "verify@v1"),

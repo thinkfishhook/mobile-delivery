@@ -80,6 +80,31 @@ class CallerChecks {
                 }
             }
         }
+        val localActions = root.resolve(".github/actions")
+        if (localActions.isDirectory()) {
+            localActions
+                .walk()
+                .filter { it.isRegularFile() && it.name in setOf("action.yml", "action.yaml") }
+                .forEach { path ->
+                    val document = workflowDocument(path.readText())
+                    workflowSteps(yamlMapping(document["runs"])).forEach { step ->
+                        val reference = step["uses"]?.toString().orEmpty()
+                        if (reference.startsWith("$repository/")) {
+                            val match =
+                                requireNotNull(
+                                    Regex("${Regex.escape(repository)}/([a-z-]+)@([a-f0-9]{40})")
+                                        .matchEntire(reference)
+                                ) {
+                                    "${path.name}: pin nested shared actions to full immutable SHAs"
+                                }
+                            require(match.groupValues[1] in actions) {
+                                "${path.name}: unknown nested shared action"
+                            }
+                            pins += match.groupValues[2]
+                        }
+                    }
+                }
+        }
         require(pins.size == 1) {
             "Use one coherent full SHA for all shared actions; found ${pins.size} pins"
         }
