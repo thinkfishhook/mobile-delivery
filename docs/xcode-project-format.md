@@ -8,8 +8,11 @@ application targets/configurations fail before the archive callback.
 The legacy plist path retains its existing `plutil` conversion and overlays the
 selected application's Release configuration only. The hierarchical JSON path
 accepts comments/trailing commas and selects the configured target by name and
-application product type. It writes six Release settings: manual signing style,
-identity, team, provisioning profile specifier, marketing version and build number.
+application product type. Both `product-type: application` and the full
+`full-product-type: com.apple.product-type.application` representation are supported;
+when both keys exist, Xcode's primary `product-type` takes precedence. It writes six
+Release settings: manual signing style, identity, team, provisioning profile specifier,
+marketing version and build number.
 Other targets, packages, files, phases, project settings and unrelated platform
 settings remain unchanged in the parsed tree.
 
@@ -66,3 +69,12 @@ is separately authorized for publication.
 - `bash internal/actionlint.sh`: passed using its checksum-verified pinned tool.
 - `git diff --check`: passed. No credentials, private downstream source,
   live signing, Apple upload or remote repository mutation was involved.
+
+## Review verification, 2026-11-21
+
+The full-product-type regression failed before the decoder fix, then passed with
+full application selection, full bundle rejection and exact-byte restoration.
+`./gradlew check checkXcodeProjectFormat installDist` passed on Xcode 27.2 (27B52):
+401 tests across 55 suites, zero failures/errors/skips, plus native settings readback,
+Detekt, formatting, workflow checks and CLI packaging. No signed archive or upload
+was performed; consumer live evidence remains separate.

@@ -101,13 +101,14 @@ private fun hierarchicalSigningProject(
             it as? JsonObject ?: throw ArtifactError("Unsupported project.xcproj target")
         } ?: throw ArtifactError("Expected project.xcproj targets")
     val matches = targets.indices.filter { targets[it]["name"] == JsonPrimitive(config.ios.target) }
-    if (
-        matches.size != 1 ||
-            targets[matches.single()]["product-type"] != JsonPrimitive("application")
-    )
+    if (matches.size != 1)
         throw ArtifactError("Expected one ${config.ios.target} application target")
     val index = matches.single()
     val target = targets[index]
+    val application =
+        target["product-type"]?.let { it == JsonPrimitive("application") }
+            ?: (target["full-product-type"] == JsonPrimitive("com.apple.product-type.application"))
+    if (!application) throw ArtifactError("Expected one ${config.ios.target} application target")
     val settings =
         (target["build-settings"] ?: JsonObject(emptyMap())) as? JsonObject
             ?: throw ArtifactError("Expected project.xcproj target build-settings object")

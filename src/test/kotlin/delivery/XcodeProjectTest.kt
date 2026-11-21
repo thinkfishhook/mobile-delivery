@@ -18,6 +18,40 @@ class XcodeProjectTest {
     private val identity = SigningIdentity("profile", "certificate")
 
     @Test
+    fun `full application product type overlays correctly while full bundle type remains rejected`() =
+        temp { root ->
+            val project = root.resolve(config.ios.project).resolve("project.xcproj")
+            project.parent.createDirectories()
+            val full =
+                fixture.replace(
+                    "\"product-type\": \"application\"",
+                    "\"full-product-type\": \"com.apple.product-type.application\"",
+                )
+            project.writeText(full)
+            var archived = false
+            Signing(config, RecordingCommands(), emptyMap()).withProject(root, build, identity) {
+                archived = true
+                assertContains(project.readText(), "MARKETING_VERSION[config=Release]")
+                assertContains(project.readText(), "com.apple.product-type.application")
+            }
+            assertTrue(archived)
+            assertEquals(full, project.readText())
+            val invalid =
+                full.replace("com.apple.product-type.application", "com.apple.product-type.bundle")
+            project.writeText(invalid)
+            assertFailsWith<ArtifactError> {
+                Signing(config, RecordingCommands(), emptyMap()).withProject(
+                    root,
+                    build,
+                    identity,
+                ) {
+                    fail("Bundle must not archive as an application")
+                }
+            }
+            assertEquals(invalid, project.readText())
+        }
+
+    @Test
     fun `hierarchical project restores exact bytes when archive fails`() = temp { root ->
         val project = root.resolve(config.ios.project).resolve("project.xcproj")
         project.parent.createDirectories()
