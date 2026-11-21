@@ -85,7 +85,7 @@ class BetaDelivery(
         }
             .getOrNull()
             ?.second
-            ?.takeIf { it.count == count }
+            ?.takeIf { it.legacyCount == count }
         val receipts =
             facts.receipts.mapNotNull { tag ->
                 val (version, number) = tag.removePrefix("deploy/testflight/").split('/')
@@ -288,6 +288,9 @@ class BetaDelivery(
         // Read the retained bytes back before anything reaches Apple.
         val retainedPackage = artifacts.download(retained, destination)
         val manifest = retainedPackage.manifest
+        require(manifest.schema == 1) {
+            "Reserved packages require the split preparation/deployment contract, not the legacy all-in-one caller"
+        }
         require(manifest.sha == sha) { "The retained build belongs to ${manifest.sha}" }
         val facts = facts()
         val listed =
@@ -366,6 +369,7 @@ class BetaDelivery(
                 now().toOffsetDateTime().toString(),
                 config.xcode,
                 config.asc,
+                preparation = manifest?.preparation,
             )
         output
             .resolve("receipt.json")

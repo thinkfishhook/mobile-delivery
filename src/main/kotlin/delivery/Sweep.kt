@@ -34,7 +34,10 @@ class Sweep(
     private val hints: WorkflowHints = WorkflowHints(emptyMap()),
     private val onDelivered: (String, Trace) -> Unit = { _, _ -> },
     private val redStreak: (String) -> String? = { null },
+    private val preparations: () -> List<PreparationRecord> = { emptyList() },
 ) {
+    private val preparationRecords by lazy(preparations)
+
     fun run(tip: String, audit: Boolean = false): SweepReport {
         val findings = mutableListOf<SweepFinding>()
         val facts =
@@ -156,13 +159,24 @@ class Sweep(
             if (
                 version == null ||
                     number == null ||
-                    number.count < baseline ||
+                    (number.legacyCount != null && number.legacyCount!! < baseline) ||
                     tag in facts.receipts ||
                     build.processingState != "VALID" ||
                     build.expired
             )
                 return@mapNotNull null
             try {
+                val preparation =
+                    if (number.legacyCount == null) {
+                        val record =
+                            preparationRecords.singleOrNull { it.preparation.number == number }
+                                ?: return@mapNotNull null
+                        record.preparation.takeIf {
+                            record.manifest != null &&
+                                it.version == version &&
+                                it.request.bundleId == config.bundleId
+                        } ?: return@mapNotNull null
+                    } else null
                 // Not testable, or in a terminal TestFlight state such as expired: no receipt.
                 // Any other failure to read it is a repair error.
                 val testable =
@@ -174,14 +188,20 @@ class Sweep(
                 if (!testable) return@mapNotNull null
                 val sha =
                     requireNotNull(
-                        commitInNotes(apple.notes(build.id)) ?: source.commitWithCount(number.count)
+                        preparation?.request?.sha
+                            ?: commitInNotes(apple.notes(build.id))
+                            ?: source.commitWithCount(number.count)
                     ) {
                         "No delivery-branch commit has count ${number.count}"
                     }
-                require(source.count(sha) == number.count) {
+                require(preparation != null || source.count(sha) == number.count) {
                     "Commit $sha does not match build $number"
                 }
-                tags.write(tag, sha, Receipt(sha, version, number, build.id))
+                tags.write(
+                    tag,
+                    sha,
+                    Receipt(sha, version, number, build.id, preparation = preparation),
+                )
                 repaired += tag
                 SweepFinding(
                     IncidentSubject.BetaCommit(sha),
@@ -201,9 +221,17 @@ class Sweep(
     // A receipt must stay an annotated tag on the commit whose count matches its build number.
     private fun auditReceipts(receipts: Set<String>) = receipts.mapNotNull { tag ->
         try {
-            val count = BuildNumber(tag.substringAfterLast('/')).count
+            val number = BuildNumber(tag.substringAfterLast('/'))
             val sha = tags.commit(tag)
-            require(source.count(sha) == count) { "$tag points at $sha, whose count is not $count" }
+            val count = number.legacyCount
+            if (count != null)
+                require(source.count(sha) == count) {
+                    "$tag points at $sha, whose count is not $count"
+                }
+            else
+                require(tags.read(tag)?.preparation?.request?.sha == sha) {
+                    "$tag has no matching reserved-source provenance"
+                }
             null
         } catch (error: Exception) {
             SweepFinding(

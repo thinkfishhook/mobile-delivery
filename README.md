@@ -338,6 +338,10 @@ before credential validation or deployment operations.
 
 ## Where state comes from
 
+The existing all-in-one caller retains the legacy numbering and recovery rules below.
+The foundation for split CI/deployment uses [signed-package reservations and schema-2
+provenance](docs/signed-package-identity.md); separate preparation/upload callers are subsequent work.
+
 | Question | Answer |
 | --- | --- |
 | Is commit `S` delivered? | A `deploy/testflight/<version>/<count>.<n>` tag on `S`. |

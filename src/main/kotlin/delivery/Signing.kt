@@ -366,6 +366,7 @@ class Signing(
             } else null
         build.artifact =
             ArtifactManifest(
+                schema = if (build.preparation == null) 1 else 2,
                 sha = build.sha,
                 version = build.version,
                 number = build.number,
@@ -386,6 +387,7 @@ class Signing(
                     ),
                 symbols = symbols,
                 symbolsAbsentReason = if (symbols == null) "Archive contained no dSYMs" else null,
+                preparation = build.preparation,
             )
         writeArchiveEvidence(output, build)
         ipa

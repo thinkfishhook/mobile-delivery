@@ -34,16 +34,23 @@ value class MarketingVersion(val value: String) {
 @JvmInline
 value class BuildNumber(val value: String) {
     init {
-        require(Regex("[1-9]\\d{0,3}\\.[1-9]\\d?").matches(value)) {
+        require(
+            Regex("[1-9]\\d{0,3}\\.[1-9]\\d?|[1-9]\\d{0,3}\\.(0|[1-9]\\d?)\\.[1-9]\\d?")
+                .matches(value)
+        ) {
             "Invalid build number: $value"
         }
     }
 
     val count: Int
-        get() = value.substringBefore('.').toInt()
+        get() = requireNotNull(legacyCount) { "$value is a reserved identity, not a commit count" }
+
+    val legacyCount: Int?
+        get() =
+            value.takeIf { it.count { char -> char == '.' } == 1 }?.substringBefore('.')?.toInt()
 
     val attempt: Int
-        get() = value.substringAfter('.').toInt()
+        get() = value.substringAfterLast('.').toInt()
 
     override fun toString() = value
 }
@@ -61,7 +68,19 @@ data class Build(
     var ipaSha256: String? = null,
     var ipaBytes: Long? = null,
     var artifact: ArtifactManifest? = null,
-)
+    val preparation: Preparation? = null,
+) {
+    init {
+        if (preparation != null)
+            require(
+                sha == preparation.request.sha &&
+                    version == preparation.version &&
+                    number == preparation.number
+            ) {
+                "Build differs from its preparation"
+            }
+    }
+}
 
 object Policy {
     // New builds use the month's `YY.MM.RR` one past the highest version of that month Apple

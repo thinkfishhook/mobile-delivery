@@ -10,12 +10,14 @@ interface ReceiptTags {
 
     fun commit(tag: String): String
 
+    fun read(tag: String): Receipt? = null
+
     fun write(tag: String, sha: String, receipt: Receipt)
 }
 
 class InvalidReceiptName(message: String) : IllegalArgumentException(message)
 
-// The tool writes only `<prefix><YY.MM.RR>/<count>.<attempt>`. Anything else under a receipt
+// The tool writes legacy count.attempt or reserved three-component build numbers. Anything else
 // prefix was made by hand and would be misread, so the run stops until a person deletes it.
 fun requireReceiptNames(prefix: String, names: Set<String>): Set<String> = names.onEach { tag ->
     val parts = tag.removePrefix(prefix).split('/')
@@ -28,7 +30,7 @@ fun requireReceiptNames(prefix: String, names: Set<String>): Set<String> = names
                 .isSuccess
     if (!valid)
         throw InvalidReceiptName(
-            "$tag is not a receipt the delivery tool writes (${prefix}<YY.MM.RR>/<count>.<attempt>). Delete it, then rerun: git push origin :refs/tags/$tag"
+            "$tag is not a receipt the delivery tool writes (${prefix}<YY.MM.RR>/<build-number>). Delete it, then rerun: git push origin :refs/tags/$tag"
         )
 }
 
@@ -53,6 +55,20 @@ class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
             .getValue("object")
             .jsonObject
             .string("sha")
+    }
+
+    override fun read(tag: String): Receipt {
+        val target = github.api("git/ref/tags/$tag")!!.jsonObject.getValue("object").jsonObject
+        require(target.string("type") == "tag") { "Receipt $tag is not an annotated tag" }
+        val annotated = github.api("git/tags/${target.string("sha")}")!!.jsonObject
+        val receipt = json.decodeFromString<Receipt>(annotated.string("message"))
+        require(
+            annotated.getValue("object").jsonObject.string("sha") == receipt.sha &&
+                tag.endsWith("/${receipt.version}/${receipt.number}")
+        ) {
+            "Receipt target/name differs from its identity"
+        }
+        return receipt
     }
 
     override fun write(tag: String, sha: String, receipt: Receipt) {
@@ -88,6 +104,16 @@ class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
                     identity(recorded) == identity(manifest.jsonObject)
             ) {
                 "Receipt collision: $tag"
+            }
+            if (receipt.preparation != null || receipt.number.legacyCount == null) {
+                require(
+                    runCatching {
+                        json.decodeFromString<Receipt>(existing.string("message")).preparation
+                    }
+                        .getOrNull() == receipt.preparation && receipt.preparation != null
+                ) {
+                    "Receipt provenance collision: $tag"
+                }
             }
         }
         val ref = github.api("git/ref/tags/$tag", missing = true, receiptToken = true)?.jsonObject
@@ -148,4 +174,19 @@ data class Receipt(
     val xcode: String? = null,
     val asc: String? = null,
     @SerialName("asc_version_id") val ascVersionId: String? = null,
-)
+    val preparation: Preparation? = null,
+) {
+    init {
+        require(number.legacyCount != null || preparation != null) {
+            "Reserved receipts require preparation provenance"
+        }
+        if (preparation != null)
+            require(
+                sha == preparation.request.sha &&
+                    version == preparation.version &&
+                    number == preparation.number
+            ) {
+                "Receipt identity differs from its preparation"
+            }
+    }
+}
