@@ -10,6 +10,11 @@ failures never gate deployment. Local pre-push risk review composes existing hoo
 
 ## Quick start
 
+The reporter permission correction for v1.1.1 is being prepared. Candidate templates
+require Checks read and must have every shared pin replaced with the v1.1.1 release SHA
+before copying. The v1.1.0 pin below identifies the previous baseline; its caller validator
+rejects the corrected permission set. Publication will refresh these template pins.
+
 The copy-in examples pin stable [v1.1.0](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.0),
 `d0b62a1a9b8e3f531c0ffbb97629a452cffc0268`. Start with
 `IOS_DELIVERY_ENABLED=false` and `IOS_APPSTORE_ENABLED=false`. CI still verifies and retains

@@ -10,3 +10,7 @@ local hook, structural `callerChecks`, normal dependency-PR observation, live au
 same-package TestFlight evidence and identity-preserving rollback. Configuration success
 and fixtures do not establish a real app deployment. Manual live evidence may remain
 explicitly pending until naturally exercised.
+
+The unreleased v1.1.1 reporter permission correction requires replacing all shared pins
+with that patch release SHA before copying these candidate workflows. The previous
+v1.1.0 validator rejects the added Checks-read grant. Stable publication refreshes the pins.

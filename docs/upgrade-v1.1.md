@@ -30,7 +30,8 @@ examples; the updated trunk examples pin the actual stable release commit.
    movement. Do not add a main-only dispatch guard or CI/AI prerequisite to manual delivery.
 4. Add the independent boundary reporter jobs exactly as shown. Reporters run on Ubuntu
    after their named operation even if checkout/setup fails, with no app credentials.
-   Their own queue prevents duplicate incidents. Keep AI review in its own workflow,
+   Their own queue prevents duplicate incidents. Reporter permissions include `checks: read`
+   for check-run annotation retrieval, alongside Contents/Actions read and Issues write. Keep AI review in its own workflow,
    never in CI/deploy aggregate success. Configure one provider, a supported explicit
    `AI_REVIEW_MODEL` repository variable and its repository API secret (`OPENAI_API_KEY`
    for Codex). An installed GitHub App does not provide this runtime key. P1–P3 and urgent

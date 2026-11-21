@@ -17,4 +17,4 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: thinkfishhook/mobile-delivery/verify@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0
+      - uses: thinkfishhook/mobile-delivery/verify@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0 baseline; replace all pins with v1.1.1 before use (unreleased permission patch)

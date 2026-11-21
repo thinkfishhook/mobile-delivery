@@ -64,3 +64,7 @@ branch guard or artifact inputs. Configure one supported AI_REVIEW_MODEL and the
 repository provider secret. Run `mobile-delivery callerChecks` from the app checkout.
 See `docs/upgrade-v1.1.md` in the tool for the packaged local hook, safe rollback and exact
 live acceptance evidence; copying files alone does not establish a successful deployment.
+
+The unreleased v1.1.1 reporter permission correction requires replacing all shared pins
+with that patch release SHA before copying these candidate workflows. The previous
+v1.1.0 validator rejects the added Checks-read grant. Stable publication refreshes the pins.

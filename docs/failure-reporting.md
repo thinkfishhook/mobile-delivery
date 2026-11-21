@@ -11,7 +11,7 @@ report:
   needs: ci
   runs-on: ubuntu-latest
   timeout-minutes: 5
-  permissions: { contents: read, actions: read, issues: write }
+  permissions: { contents: read, actions: read, checks: read, issues: write }
   concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
   steps:
     - uses: thinkfishhook/mobile-delivery/report-failure@FULL_RELEASE_SHA
@@ -69,3 +69,8 @@ recovery, human content and lost responses. No broken production run is needed.
 
 Developer checks require Node 22 or newer alongside JDK 21. `./gradlew check` runs the
 dependency-free reporter fixtures, without GitHub writes, inference or Apple access.
+
+The annotation endpoint requires `checks: read` in addition to Actions read. Without it,
+GitHub returns HTTP 403 before classification/publication. Keep this read-only grant on
+the independent reporter; Checks write is unnecessary. The validator rejects both the
+missing grant and broader write access. See the [GitHub annotation API permissions](https://docs.github.com/en/rest/checks/runs#list-check-run-annotations).

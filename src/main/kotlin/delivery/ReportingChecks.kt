@@ -26,8 +26,16 @@ internal fun validateReportingJob(document: Map<*, *>, name: String) {
         "Reporter must not inherit app/signing credentials"
     }
     val permissions = job["permissions"] ?: document["permissions"]
-    require(permissions == mapOf("contents" to "read", "actions" to "read", "issues" to "write")) {
-        "Reporter permissions must be exactly Contents/Actions read and Issues write"
+    require(
+        permissions ==
+            mapOf(
+                "contents" to "read",
+                "actions" to "read",
+                "checks" to "read",
+                "issues" to "write",
+            )
+    ) {
+        "Reporter permissions must be exactly Contents/Actions/Checks read and Issues write"
     }
     val inputs = yamlMapping(steps.single()["with"])
     require(

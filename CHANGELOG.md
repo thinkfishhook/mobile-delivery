@@ -5,6 +5,15 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-21
+
+### Fixed
+
+- Boundary reporting callers require Checks read for check-run annotation access, alongside
+  Contents/Actions read and Issues write. Missing Checks read or unnecessary Checks write
+  is rejected by caller policy. Update reporter job permissions when upgrading; v1.1.0
+  packages and reserved identities remain compatible. Existing release tags/assets stay immutable.
+
 ## [1.1.0] - 2026-11-21
 
 ### Upgrade contract

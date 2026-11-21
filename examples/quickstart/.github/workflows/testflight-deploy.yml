@@ -14,7 +14,7 @@ jobs:
     permissions: { contents: write, actions: read, issues: write }
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/testflight-deploy@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0
+      - uses: thinkfishhook/mobile-delivery/testflight-deploy@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0 baseline; replace all pins with v1.1.1 before use (unreleased permission patch)
         with:
           branch: main
           ci-workflow: ci.yml
@@ -31,10 +31,10 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions: { contents: read, actions: read, issues: write }
+    permissions: { contents: read, actions: read, checks: read, issues: write }
     concurrency: { group: mobile-delivery-reporting, queue: max, cancel-in-progress: false }
     steps:
-      - uses: thinkfishhook/mobile-delivery/report-failure@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0
+      - uses: thinkfishhook/mobile-delivery/report-failure@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0 baseline; replace all pins with v1.1.1 before use (unreleased permission patch)
         with:
           role: deploy
           operation-job: deploy
