@@ -3,12 +3,12 @@
 v1.1.0 is an additive minor release. The existing all-in-one `testflight`, maintenance,
 release, rollout, schema-1 package and receipt readers remain supported. New CI and
 standalone deployment reserve schema-2 package identities. Private app evidence belongs
-in each app's migration ticket. The v1.1.1 permission correction is being prepared;
-its compatible reviewed implementation is `2d03ee4e318219a69ef1a8899a8d064138779b58`. Candidate action examples pin that
-implementation until immutable stable publication supplies the final v1.1.1 full SHA.
-Use one compatible pin consistently. The previous stable v1.1.0 validator rejects the
-new Checks-read grant, so its action pin and downloaded CLI must not be paired with
-these corrected callers. Package/identity readers remain compatible across this patch.
+in each app's migration ticket. Stable [v1.1.1](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.1)
+is `1050b2bf67c2e22289ee7452cf12bf089b6699ba`. Use that full SHA consistently for all
+shared actions and the matching v1.1.1 CLI. The previous v1.1.0 caller validator rejects
+the corrected Checks-read grant. Package/identity readers remain compatible across this
+patch. Current trunk templates pin the actual stable release; the tagged source retains
+explicitly labelled implementation-candidate pins.
 
 ## Prepare and integrate
 
@@ -44,10 +44,9 @@ these corrected callers. Package/identity readers remain compatible across this 
    events. Observe a normal update and count each expected workflow/event/attempt once.
    Multiple jobs are not duplicate runs. Keep the `thinkfishhook/mobile-delivery*`
    Dependabot group so every used action path advances coherently.
-6. Validate with the CLI from the same compatible revision as the action pins. While
-   v1.1.1 is unreleased, build the reviewed candidate `2d03ee4e318219a69ef1a8899a8d064138779b58` with `./gradlew installDist`;
-   after publication use the v1.1.1 release zip. Do not use the older v1.1.0 CLI for the
-   corrected reporter permissions. From the app root:
+6. Validate with the CLI from the same compatible release as the action pins. Download
+   the v1.1.1 release zip and verify its checksum. The v1.1.0 CLI rejects the corrected
+   reporter permissions. From the app root:
 
    ```sh
    /absolute/mobile-delivery/bin/mobile-delivery callerChecks

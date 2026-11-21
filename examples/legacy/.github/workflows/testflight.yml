@@ -17,7 +17,7 @@ jobs:
     concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
     permissions: { contents: read, actions: write, issues: write }
     steps:
-      - uses: thinkfishhook/mobile-delivery/testflight@d0b62a1a9b8e3f531c0ffbb97629a452cffc0268 # v1.1.0
+      - uses: thinkfishhook/mobile-delivery/testflight@1050b2bf67c2e22289ee7452cf12bf089b6699ba # v1.1.1
         # CHANGE ME: if the app needs build secrets, add their names to build_environment.
         # env: { ANALYTICS_KEY: '${{ secrets.ANALYTICS_KEY }}' }
         with:

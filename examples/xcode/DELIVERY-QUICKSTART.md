@@ -3,8 +3,7 @@
 Replace the neutral `.github/delivery.json` identities, project paths, test commands,
 fresh report paths and runner/Xcode choices with your app's existing requirements.
 Retain existing deterministic checks, app build values, binary checks, switches and schedules.
-Use one integration branch consistently. All candidate action references pin the reviewed v1.1.1 implementation; stable publication
-will replace that implementation pin with the immutable patch release SHA. Merge the Dependabot grouping rule into existing rules.
+Use one integration branch consistently. All shared action references pin stable v1.1.1 at `1050b2bf67c2e22289ee7452cf12bf089b6699ba`. Merge the Dependabot grouping rule into existing rules.
 
 Follow `docs/upgrade-v1.1.md` in the tool checkout/distribution for credentials, the packaged
 local hook, structural `callerChecks`, normal dependency-PR observation, live automatic
@@ -12,6 +11,5 @@ same-package TestFlight evidence and identity-preserving rollback. Configuration
 and fixtures do not establish a real app deployment. Manual live evidence may remain
 explicitly pending until naturally exercised.
 
-The reviewed candidate includes the required Checks-read grant. Do not substitute the
-previous v1.1.0 validator, which rejects this corrected permission set. Stable publication
-refreshes every candidate pin together.
+The v1.1.1 reporter requires Checks read. Use the matching v1.1.1 CLI; the previous
+v1.1.0 validator rejects this corrected permission set.
