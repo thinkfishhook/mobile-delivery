@@ -9,6 +9,8 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Codex review retains the CLI transport host needed for immutable Git MCP context;
+  model shell/code/browser/write capabilities remain disabled.
 - Boundary reporting callers require Checks read for check-run annotation access, alongside
   Contents/Actions read and Issues write. Missing Checks read or unnecessary Checks write
   is rejected by caller policy. Update reporter job permissions when upgrading; v1.1.0
