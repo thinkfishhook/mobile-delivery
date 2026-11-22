@@ -5,7 +5,7 @@ release, rollout, schema-1 package and receipt readers remain supported. New CI 
 standalone deployment reserve schema-2 package identities. Private app evidence belongs
 in each app's migration ticket. Stable [v1.1.1](https://github.com/thinkfishhook/mobile-delivery/releases/tag/v1.1.1)
 is `1050b2bf67c2e22289ee7452cf12bf089b6699ba`. Use that full SHA consistently for all
-shared actions and the matching v1.1.1 CLI. The previous v1.1.0 caller validator rejects
+shared actions and a compatible CLI (v1.1.1 or newer). The previous v1.1.0 caller validator rejects
 the corrected Checks-read grant. Package/identity readers remain compatible across this
 patch. Current trunk templates pin the actual stable release; the tagged source retains
 explicitly labelled implementation-candidate pins.
@@ -39,13 +39,17 @@ explicitly labelled implementation-candidate pins.
    for Codex). An installed GitHub App does not provide this runtime key. P1–P3 and urgent
    P0 findings create issues; no finding or review outage holds deployment.
 5. Use `dependency-ci.yml` for normal same-repository Dependabot PR opened/synchronize
-   events. It checks out the exact PR head and invokes read-only `verify`; it receives no
+   events. Both setup and read-only `verify` check out the immutable event `github.sha`
+   (the PR merge candidate), so setup and verification use the same source. The PR head
+   remains the event/check association; it is not a second source selection. Verification receives no
    Apple/signing credentials. Do not combine broad branch pushes with those same PR
    events. Observe a normal update and count each expected workflow/event/attempt once.
    Multiple jobs are not duplicate runs. Keep the `thinkfishhook/mobile-delivery*`
    Dependabot group so every used action path advances coherently.
 6. Validate with the CLI from the same compatible release as the action pins. Download
-   the v1.1.1 release zip and verify its checksum. The v1.1.0 CLI rejects the corrected
+   the current stable release zip and verify its checksum. The v1.1.2 local review
+   runtime includes scoped shallow-history checks and explicit immutable dependency context;
+   these local-only fixes do not require changing v1.1.1 action pins. The v1.1.0 CLI rejects the corrected
    reporter permissions. From the app root:
 
    ```sh
