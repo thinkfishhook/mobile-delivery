@@ -97,3 +97,22 @@ not make a complete app push incomplete. The reviewer neither deletes those refs
 alters their shallow metadata; only requested source ancestry is assessed.
 
 
+## Explicit dependency source context
+
+A trusted operator can make pinned dependency implementations available as additional
+immutable views. Fetch the known commit into the caller’s Git object database, then add
+its exact full object ID to local configuration:
+
+```sh
+git fetch --no-tags https://github.com/OWNER/DEPENDENCY FULL_COMMIT
+git config --local --add mobile-delivery.reviewContextCommit FULL_COMMIT
+```
+
+The hook does not fetch automatically or read this authority from tracked repository
+files. At most 16 explicit commit IDs are permitted; missing objects and non-commit views
+keep review incomplete. They are available through the same bounded read-only Git tools,
+with no working-tree reads, execution or extra credentials. Findings still require an
+anchor in an outgoing caller view. The normalized dependency set participates in cache
+and human-acceptance keys, so changing it invalidates earlier decisions. Repository and
+dependency instructions remain untrusted review data. Remove local context entries when
+they are no longer needed.

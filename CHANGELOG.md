@@ -5,6 +5,17 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-22
+
+### Fixed
+
+- Local review checks shallow boundaries only in requested source ancestry, so unrelated
+  tooling refs cannot block complete app histories. Relevant shallow histories still fail.
+- Trusted local configuration can add exact dependency commit views to read-only review
+  context. Missing or invalid views fail; context changes invalidate cached decisions,
+  and findings remain anchored to outgoing app source. No automatic fetch or execution.
+
+
 ## [1.1.1] - 2026-11-21
 
 ### Fixed
