@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 const oid = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 const check = (value,message) => { if(!value) throw Error(message); };
-export async function requestConnectorReview({api,repository,before,after,runUrl}) {
+export async function requestConnectorReview({api,repository,before,after,runUrl,trigger='mention'}) {
+ check(['mention','automatic'].includes(trigger),'Expected a supported review trigger');
  check(/^[\w.-]+\/[\w.-]+$/.test(repository)&&oid(before)&&oid(after)&&before!==after,'Expected one exact parent/commit pair');
  const prefix=`https://github.com/${repository}/actions/runs/`;
  check(runUrl.startsWith(prefix)&&/^[1-9]\d*(?:\/attempts\/[1-9]\d*)?$/.test(runUrl.slice(prefix.length)),'Expected the exact caller-repository run URL');
@@ -31,8 +32,10 @@ export async function requestConnectorReview({api,repository,before,after,runUrl
  }
  check(pr.body?.includes(marker)&&pr.head?.sha===after&&pr.base?.sha===before&&pr.head?.ref===head&&pr.base?.ref===base,'Review PR does not match its exact owned source');
  check(pr.state==='open','A human closed this review PR; preserve that decision');
- const comments=await api(`issues/${pr.number}/comments?per_page=100`);
- check(Array.isArray(comments)&&comments.length<100,'Review trigger inventory is incomplete');
- if(!comments.some(c=>c.body==='@codex review'&&c.user?.login==='github-actions[bot]'))await api(`issues/${pr.number}/comments`,{body:'@codex review'});
- return {number:pr.number,url:pr.html_url,before,after,base,head,requested:true,complete:false};
+ if(trigger==='mention'){
+  const comments=await api(`issues/${pr.number}/comments?per_page=100`);
+  check(Array.isArray(comments)&&comments.length<100,'Review trigger inventory is incomplete');
+  if(!comments.some(c=>c.body==='@codex review'&&c.user?.login==='github-actions[bot]'))await api(`issues/${pr.number}/comments`,{body:'@codex review'});
+ }
+ return {number:pr.number,url:pr.html_url,before,after,base,head,trigger,requested:true,complete:false};
 }

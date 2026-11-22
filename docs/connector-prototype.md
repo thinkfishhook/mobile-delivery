@@ -8,8 +8,9 @@ review. This prototype checks the next boundary: an Actions-authored PR and requ
 `Connector review prototype` is opt-in `workflow_dispatch` in the shared tool repository.
 Supply an exact source commit and its authoritative first parent. The driver reads those
 identities from GitHub, creates immutable disposable `codex/review/.../base` and `head`
-refs, opens a review-only PR between them, and comments `@codex review` as the workflow
-bot. The PR never targets main/trunk. Existing refs/PRs/triggers are reused; moved refs,
+refs and opens a review-only PR between them as the workflow bot. The current trial
+relies solely on the repository’s Automatic review / All PRs / On PR open setting; it
+posts no `@codex` mention. The PR never targets main/trunk. Existing refs/PRs/triggers are reused; moved refs,
 closed human decisions and ambiguous identities fail without force updates or reopening.
 No repository source from the requested commits executes in the workflow. It receives
 only its scoped GitHub token, no OpenAI key or app/signing credentials. Model identity is
@@ -67,3 +68,15 @@ Unknown priorities, mismatched source/model, unavailable anchors or evidence exc
 shared schema bound fail incomplete before publication. This adapter is fixture-tested;
 no live automatic publication or consumer acceptance is inferred until the workflow is
 integrated and a trusted bot-PR review completes.
+
+
+## Automatic PR-open trial
+
+The owner enabled repository Automatic review for All PRs, triggered on PR open, in the
+desktop app. Run45040245440 created bot-authored PR31; the old requester also posted a
+bot mention and received the account-link prompt. No automatic completion was observed.
+The current driver explicitly selects `trigger: automatic`, creating or reusing the owned
+review-only PR without reading or posting trigger comments. The helper’s default mention
+mode remains available for compatibility, and unknown modes fail before mutations.
+A reused PR does not generate a new open event; use a fresh real parent/commit pair for a
+new automatic trial, never reopen a human-closed PR or move an immutable source branch.

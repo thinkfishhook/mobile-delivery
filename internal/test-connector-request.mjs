@@ -52,3 +52,15 @@ test('lost ref and PR create responses are read back without duplicate mutations
  const api=async(path,body,method)=>{const result=await f.api(path,body,method);if(body&&['git/refs','pulls'].includes(path)&&!lost.has(path)){lost.add(path);throw Error('response lost');}return result;};
  await requestConnectorReview({api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1'});assert.equal(f.refs.size,2);assert.equal(f.pulls.length,1);assert.equal(f.comments.length,1);
 });
+
+test('automatic review is requested only by opening the bot PR, without a mention',async()=>{
+ const f=fixture();const result=await requestConnectorReview({api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',trigger:'automatic'});
+ assert.equal(f.pulls.length,1);assert.equal(f.comments.length,0);assert.equal(result.trigger,'automatic');assert.equal(result.complete,false);assert.ok(f.calls.every(c=>!c.path.startsWith('issues/')));
+});
+test('automatic reruns reuse the PR without adding a manual trigger',async()=>{
+ const f=fixture();const input={api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',trigger:'automatic'};
+ await requestConnectorReview(input);await requestConnectorReview(input);assert.equal(f.pulls.length,1);assert.equal(f.refs.size,2);assert.equal(f.comments.length,0);
+});
+test('unknown review trigger modes fail before any GitHub mutation',async()=>{
+ const f=fixture();await assert.rejects(requestConnectorReview({api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',trigger:'unknown'}),/trigger/);assert.equal(f.refs.size,0);assert.equal(f.pulls.length,0);
+});
