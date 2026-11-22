@@ -89,3 +89,11 @@ remain available. This does not enable model code execution: `code_mode`, shell,
 browser, image, plugins and subagent tools stay disabled. A real-client integration check
 confirmed successful immutable list/read calls; disabling the transport previously left
 review incomplete. Upgrade the hook runtime as well as caller pins when taking this fix.
+
+
+A shallow boundary reachable from a requested base or tip keeps the review incomplete,
+including initial, rewritten and deleted refs. Unrelated tooling-managed shallow refs do
+not make a complete app push incomplete. The reviewer neither deletes those refs nor
+alters their shallow metadata; only requested source ancestry is assessed.
+
+

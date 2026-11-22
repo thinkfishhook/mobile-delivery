@@ -245,3 +245,27 @@ test('Codex retains the MCP transport host while disabling model code execution'
   for (const feature of ['shell_tool', 'code_mode', 'js_repl', 'hooks', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'multi_agent']) assert.ok(disabled.includes(feature), feature);
   assert.ok(command.includes('mcp_servers.review_context.required=true'));
 });
+
+test('unrelated shallow tooling refs do not block complete requested app histories',async()=>repository(async({root,base,tip})=>{
+ const tree=git(root,'rev-parse',`${base}^{tree}`);
+ const parent=git(root,'commit-tree',tree,'-m','Foreign tooling parent');
+ const foreign=git(root,'commit-tree',tree,'-p',parent,'-m','Foreign tooling snapshot');
+ git(root,'update-ref','refs/tooling/cache',foreign);
+ const metadata=join(root,'.git','shallow');await writeFile(metadata,foreign+'\n');
+ assert.equal(git(root,'rev-parse','--is-shallow-repository'),'true');
+ const zero='0'.repeat(40);
+ const updates=outgoing(`refs/heads/topic ${tip} refs/heads/topic ${base}\nrefs/heads/new ${tip} refs/heads/new ${zero}\n(delete) ${zero} refs/heads/deleted ${base}\n`);
+ const context=await gitContext(root,updates,'origin');assert.deepEqual(context.updates.map(x=>x.kind),['fast-forward','initial','deletion']);
+ assert.match(context.prompt,/hello next/);assert.doesNotMatch(context.prompt,/Foreign tooling/);
+ const result=await prePush({root,protocol:`refs/heads/topic ${tip} refs/heads/topic ${base}\n`,remote:'origin',provider:'codex',model:'fixture-model',cliVersion:'fixture',contract:'fixture',invoke:async()=>clean()});
+ assert.equal(result.allowed,true);assert.equal(result.outcome,'clean');assert.equal(await readFile(metadata,'utf8'),foreign+'\n');assert.equal(git(root,'rev-parse','refs/tooling/cache'),foreign);
+}));
+test('shallow boundaries in either requested side remain incomplete',async()=>repository(async({root,base,tip})=>{
+ const tree=git(root,'rev-parse',`${base}^{tree}`);
+ const parent=git(root,'commit-tree',tree,'-m','Foreign parent');const foreign=git(root,'commit-tree',tree,'-p',parent,'-m','Truncated requested history');
+ git(root,'update-ref','refs/tooling/cache',foreign);await writeFile(join(root,'.git','shallow'),foreign+'\n');
+ const zero='0'.repeat(40);
+ for(const [before,after] of [[zero,foreign],[foreign,zero],[foreign,tip],[base,foreign]])await assert.rejects(gitContext(root,outgoing(`refs/heads/topic ${after} refs/heads/topic ${before}\n`),'origin'),/Shallow/);
+ let calls=0;const result=await prePush({root,protocol:`refs/heads/topic ${foreign} refs/heads/topic ${zero}\n`,remote:'origin',provider:'codex',model:'fixture-model',cliVersion:'fixture',contract:'fixture',invoke:async()=>{calls++;return clean();}});assert.equal(result.allowed,false);assert.equal(result.outcome,'incomplete');assert.equal(calls,0);
+}));
+
