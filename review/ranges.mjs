@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 export function git(root, args, { input, allowFailure = false, maxBuffer = 8 * 1024 * 1024 } = {}) {
   try { return execFileSync('git', ['-C', root, ...args], { input, env: { ...process.env, GIT_NO_REPLACE_OBJECTS: '1', GIT_NO_LAZY_FETCH: '1', GIT_OPTIONAL_LOCKS: '0' }, encoding: 'utf8', maxBuffer, stdio: ['pipe', 'pipe', 'pipe'] }).trimEnd(); }
@@ -21,8 +23,14 @@ function commit(root, object) {
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(resolved)) throw Error('Expected a source commit; non-commit object update requires explicit human acceptance');
   return resolved;
 }
+function requireCompleteHistory(root, commits) {
+  if (git(root, ['rev-parse', '--is-shallow-repository']).trim() !== 'true') return;
+  const path = resolve(root, git(root, ['rev-parse', '--git-path', 'shallow']).trim());
+  const boundaries = readFileSync(path, 'utf8').trim().split(/\r?\n/).filter(Boolean);
+  const reachable = new Set(git(root, ['rev-list', ...commits]).split('\n'));
+  if (boundaries.some(sha => reachable.has(sha))) throw Error('Shallow history intersects a requested ref; fetch its complete ancestry before review or explicitly accept this incomplete range');
+}
 export async function gitContext(root, updates, remote, { maxBytes = 4 * 1024 * 1024, fetchBase = true, fetchExact } = {}) {
-  if (git(root, ['rev-parse', '--is-shallow-repository']).trim() === 'true') throw Error('Shallow history cannot establish the full outgoing range; fetch --unshallow before review or explicitly accept this incomplete range');
   const plans = [], tips = new Set(), inspected = new Set();
   let prompt = '';
   for (const update of updates) {
@@ -39,6 +47,7 @@ export async function gitContext(root, updates, remote, { maxBytes = 4 * 1024 * 
     }
     if (!zero(update.head)) tip = commit(root, update.head);
     if (!base && !tip) throw Error('An update cannot delete an absent ref');
+    requireCompleteHistory(root, [base, tip].filter(Boolean));
     const kind = !base ? 'initial' : !tip ? 'deletion' : git(root, ['merge-base', '--is-ancestor', base, tip], { allowFailure: true }) === null ? 'rewrite' : 'fast-forward';
     const added = tip ? git(root, ['rev-list', '--reverse', ...(base ? [`${base}..${tip}`] : [tip])]).split('\n').filter(Boolean) : [];
     const removed = base && tip && kind === 'rewrite' ? git(root, ['rev-list', '--reverse', `${tip}..${base}`]).split('\n').filter(Boolean) : !tip ? [base] : [];

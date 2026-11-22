@@ -245,3 +245,42 @@ test('Codex retains the MCP transport host while disabling model code execution'
   for (const feature of ['shell_tool', 'code_mode', 'js_repl', 'hooks', 'apps', 'plugins', 'browser_use', 'computer_use', 'image_generation', 'view_image', 'multi_agent']) assert.ok(disabled.includes(feature), feature);
   assert.ok(command.includes('mcp_servers.review_context.required=true'));
 });
+
+test('unrelated shallow tooling refs do not block complete requested app histories',async()=>repository(async({root,base,tip})=>{
+ const tree=git(root,'rev-parse',`${base}^{tree}`);
+ const parent=git(root,'commit-tree',tree,'-m','Foreign tooling parent');
+ const foreign=git(root,'commit-tree',tree,'-p',parent,'-m','Foreign tooling snapshot');
+ git(root,'update-ref','refs/tooling/cache',foreign);
+ const metadata=join(root,'.git','shallow');await writeFile(metadata,foreign+'\n');
+ assert.equal(git(root,'rev-parse','--is-shallow-repository'),'true');
+ const zero='0'.repeat(40);
+ const updates=outgoing(`refs/heads/topic ${tip} refs/heads/topic ${base}\nrefs/heads/new ${tip} refs/heads/new ${zero}\n(delete) ${zero} refs/heads/deleted ${base}\n`);
+ const context=await gitContext(root,updates,'origin');assert.deepEqual(context.updates.map(x=>x.kind),['fast-forward','initial','deletion']);
+ assert.match(context.prompt,/hello next/);assert.doesNotMatch(context.prompt,/Foreign tooling/);
+ const result=await prePush({root,protocol:`refs/heads/topic ${tip} refs/heads/topic ${base}\n`,remote:'origin',provider:'codex',model:'fixture-model',cliVersion:'fixture',contract:'fixture',invoke:async()=>clean()});
+ assert.equal(result.allowed,true);assert.equal(result.outcome,'clean');assert.equal(await readFile(metadata,'utf8'),foreign+'\n');assert.equal(git(root,'rev-parse','refs/tooling/cache'),foreign);
+}));
+test('shallow boundaries in either requested side remain incomplete',async()=>repository(async({root,base,tip})=>{
+ const tree=git(root,'rev-parse',`${base}^{tree}`);
+ const parent=git(root,'commit-tree',tree,'-m','Foreign parent');const foreign=git(root,'commit-tree',tree,'-p',parent,'-m','Truncated requested history');
+ git(root,'update-ref','refs/tooling/cache',foreign);await writeFile(join(root,'.git','shallow'),foreign+'\n');
+ const zero='0'.repeat(40);
+ for(const [before,after] of [[zero,foreign],[foreign,zero],[foreign,tip],[base,foreign]])await assert.rejects(gitContext(root,outgoing(`refs/heads/topic ${after} refs/heads/topic ${before}\n`),'origin'),/Shallow/);
+ let calls=0;const result=await prePush({root,protocol:`refs/heads/topic ${foreign} refs/heads/topic ${zero}\n`,remote:'origin',provider:'codex',model:'fixture-model',cliVersion:'fixture',contract:'fixture',invoke:async()=>{calls++;return clean();}});assert.equal(result.allowed,false);assert.equal(result.outcome,'incomplete');assert.equal(calls,0);
+}));
+
+test('explicit immutable dependency views reach read-only context and change cache identity',async()=>repository(async({root,base,tip})=>{
+ git(root,'checkout','--orphan','dependency');git(root,'rm','-rf','.');await writeFile(join(root,'contract.txt'),'dependency contract one\n');git(root,'add','.');git(root,'commit','-m','Dependency one');const one=git(root,'rev-parse','HEAD');
+ await writeFile(join(root,'contract.txt'),'dependency contract two\n');git(root,'commit','-am','Dependency two');const two=git(root,'rev-parse','HEAD');git(root,'checkout','trunk');
+ let calls=0;const options={root,protocol:`refs/heads/topic ${tip} refs/heads/topic ${base}\n`,remote:'origin',provider:'codex',model:'fixture-model',cliVersion:'fixture',contract:'dependency-fixture',invoke:async input=>{calls++;const selected=input.tips.includes(two)?two:one;assert.ok(input.tips.includes(selected));assert.match(input.prompt,/dependency views/i);assert.match(await contextReader(root,input.tips)('read_file',{tip:selected,path:'contract.txt',start_line:1,end_line:1}),/dependency contract/);return clean();}};
+ const first=await prePush({...options,dependencyTips:[one]});assert.equal(first.allowed,true);assert.deepEqual(first.dependencyTips,[one]);
+ const repeat=await prePush({...options,dependencyTips:[one,one]});assert.equal(repeat.cached,true);assert.equal(calls,1);
+ const changed=await prePush({...options,dependencyTips:[two]});assert.notEqual(changed.key,first.key);assert.equal(changed.allowed,true);assert.equal(calls,2);
+ const outside=await prePush({...options,contract:'dependency-anchor-fixture',dependencyTips:[one],invoke:async()=>({...clean(),findings:[{...finding(false),path:'contract.txt',anchor:'dependency contract one'}]})});assert.equal(outside.allowed,false);assert.equal(outside.outcome,'incomplete');
+}));
+test('invalid missing and non-commit dependency views cannot create a completed review',async()=>repository(async({root,base,tip})=>{
+ let calls=0;const options={root,protocol:`refs/heads/topic ${tip} refs/heads/topic ${base}\n`,remote:'origin',provider:'codex',model:'fixture-model',cliVersion:'fixture',contract:'dependency-invalid-fixture',invoke:async()=>{calls++;return clean();}};
+ for(const dependencyTips of [['refs/heads/trunk'],Array(17).fill(base),['--upload-secret']])await assert.rejects(prePush({...options,dependencyTips}),/exact|immutable|dependency/i);
+ for(const dependencyTips of [['c'.repeat(40)],[git(root,'rev-parse',`${tip}^{tree}`)]]){const result=await prePush({...options,dependencyTips});assert.equal(result.allowed,false);assert.equal(result.outcome,'incomplete');}
+ assert.equal(calls,0);
+}));
