@@ -14,6 +14,6 @@ explicitly pending until naturally exercised.
 The v1.1.1 reporter requires Checks read. Use a compatible v1.1.1 or newer CLI; the previous
 v1.1.0 validator rejects this corrected permission set.
 
-Use normal PRs with required `PR checks` and native squash auto-merge; Codex App review
+Use normal PRs with required `PR checks` and native rebase auto-merge; Codex App review
 is inline and advisory. Integration merges trigger existing CI and TestFlight delivery.
 No provider API key is needed. See `docs/pr-workflow.md` in the tool for required settings.

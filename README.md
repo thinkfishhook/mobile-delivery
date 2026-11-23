@@ -5,7 +5,7 @@ mobile-delivery v1 serves Fish Hook’s portfolio from the public
 The shared actions verify native Xcode and Kotlin Multiplatform apps, prepare signed
 packages, deliver them to TestFlight and manage release recovery. Your repository owns
 runners, configuration and credentials. The default copy-in workflows use **Pull request checks**, **Continuous Integration**
-and **TestFlight Deploy**. Normal PRs squash-merge after required checks; the installed
+and **TestFlight Deploy**. Normal PRs use rebase-and-merge after required checks; the installed
 Codex App reviews them inline and stays advisory. Follow the [PR workflow](docs/pr-workflow.md).
 Local pre-push risk review composes existing hooks.
 
@@ -95,12 +95,12 @@ manages its own JDK 21. Install and authenticate the GitHub CLI locally (`gh aut
 4. **Configure native PR review and local review.** Enable the installed Codex App's
    automatic PR review and retain the [local risk hook](docs/local-risk-review.md).
    No provider API secret is needed for the App. Run the released CLI's `callerChecks`
-   from the app root and pinned actionlint. Configure required checks and native squash
+   from the app root and pinned actionlint. Configure required checks and native rebase
    auto-merge as described in the [PR workflow](docs/pr-workflow.md).
 
-5. **Open a normal PR and enable squash auto-merge.** `Pull request checks` verifies the
+5. **Open a normal PR and enable rebase auto-merge.** `Pull request checks` verifies the
    immutable merge candidate without signing/upload secrets. After the required checks
-   pass, the native squash merge triggers **Continuous Integration** on the integration
+   pass, the native rebase merge triggers **Continuous Integration** on the integration
    commit. With delivery disabled it retains verification evidence without archive/upload.
    With delivery enabled it prepares the signed package for automatic TestFlight Deploy.
 

@@ -58,7 +58,7 @@ it to `stale.yml`. Never auto-close `testflight-hold` issues to lift a release h
 Finish with the main README: configure `ios-delivery`, add its secrets, set both switches
 to `false`, and push to get the first green verification run before enabling delivery.
 
-Use normal PRs, required `PR checks` and native squash auto-merge. Codex App reviews
+Use normal PRs, required `PR checks` and native rebase auto-merge. Codex App reviews
 inline and remains advisory; no provider API workflow or key is part of this overlay.
 Merges trigger integration CI/preparation and exact-package TestFlight Deploy. Preserve
 switches, schedules, signing and existing checks. Follow `docs/pr-workflow.md` in the tool.

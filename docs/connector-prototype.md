@@ -1,7 +1,7 @@
 # Retired review-only PR prototype
 
 The owner replaced the direct-push/review-only bot PR approach with normal developer-authored
-PRs and native squash auto-merge after required CI checks. Codex App reviews remain inline
+PRs and native rebase auto-merge after required CI checks. Codex App reviews remain inline
 and advisory; automated finding-to-Issue publication is no longer part of this portfolio.
 See [PR workflow](pr-workflow.md) for current instructions.
 

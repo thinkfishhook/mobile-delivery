@@ -39,7 +39,7 @@ explicitly labelled implementation-candidate pins.
    rejects forks before app-runner use; required `PR checks` passes only after complete
    verification. Setup and shared verify use the immutable event merge candidate
    `github.sha`. Keep existing app checks, no PR signing/Apple credentials and no feature
-   push duplicate. Configure native squash auto-merge and required checks using
+   push duplicate. Configure native rebase auto-merge and required checks using
    [the PR workflow](pr-workflow.md). Retain the grouped dependency rule.
 6. Validate with the CLI from the same compatible release as the action pins. Download
    the current stable release zip and verify its checksum. The v1.1.2 local review
