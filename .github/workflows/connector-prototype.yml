@@ -10,11 +10,16 @@ on:
         description: Exact source commit to review (40 hex)
         type: string
         required: true
+      trigger:
+        description: PR-open trial or linked human requester
+        type: choice
+        options: [automatic, linked-mention]
+        default: automatic
 jobs:
   request:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions: { contents: write, pull-requests: write, issues: write }
+    permissions: { contents: write, pull-requests: write, issues: read }
     concurrency: { group: connector-review-prototype, queue: max, cancel-in-progress: false }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -27,4 +32,5 @@ jobs:
       - name: Request one exact review through disposable branches
         env:
           GH_TOKEN: ${{ github.token }}
+          CODEX_CONNECTOR_REQUEST_TOKEN: ${{ inputs.trigger == 'linked-mention' && secrets.CODEX_CONNECTOR_REQUEST_TOKEN || '' }}
         run: node internal/connector-prototype.mjs

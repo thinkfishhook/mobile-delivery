@@ -87,3 +87,52 @@ test('diverged, contradictory and missing combined-range ancestry fail before wr
 test('unknown source-view modes fail before any GitHub read or mutation',async()=>{
  const f=fixture();await assert.rejects(requestConnectorReview({api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',view:'latest'}),/view/);assert.equal(f.calls.length,0);
 });
+
+const linkedUser={id:328449,login:'evandelaney',type:'User'};
+function linkedFixture(){
+ const f=fixture(),linkedCalls=[];
+ const requester={user:linkedUser,api:async(path,body)=>{
+  linkedCalls.push({path,body});assert.equal(path,'issues/1/comments');
+  const comment={id:55,body:body.body,user:linkedUser};f.comments.push(comment);return comment;
+ }};
+ return {...f,requester,linkedCalls,input:{api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',trigger:'linked-mention',requester}};
+}
+test('linked requester credential is used only for the review comment, preserving bot PR ownership',async()=>{
+ const f=linkedFixture();const result=await requestConnectorReview(f.input);
+ assert.equal(f.pulls.length,1);assert.equal(f.comments[0].user.id,linkedUser.id);assert.equal(f.linkedCalls.length,1);
+ assert.ok(f.calls.filter(c=>c.path.startsWith('issues/')).every(c=>!c.body));
+ assert.deepEqual(result.requestedBy,{id:linkedUser.id,login:linkedUser.login});assert.equal(result.complete,false);
+ await requestConnectorReview(f.input);assert.equal(f.linkedCalls.length,1);
+});
+test('lost linked comment response is reconciled without another request',async()=>{
+ const f=linkedFixture(),create=f.requester.api;
+ f.requester.api=async(...args)=>{await create(...args);throw Error('response lost');};
+ await requestConnectorReview(f.input);await requestConnectorReview(f.input);assert.equal(f.linkedCalls.length,1);assert.equal(f.comments.length,1);
+});
+test('missing or nonhuman linked requester identities fail before main GitHub reads or writes',async()=>{
+ for(const requester of [undefined,{}, {api:async()=>{},user:{...linkedUser,id:0}}, {api:async()=>{},user:{...linkedUser,type:'Bot'}},{api:async()=>{},user:{...linkedUser,login:'bad\nactor'}},{api:async()=>{},user:{...linkedUser,login:undefined}},{api:async()=>{},user:{...linkedUser,login:123}}]){
+  const f=fixture();await assert.rejects(requestConnectorReview({api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',trigger:'linked-mention',requester}),/linked|requester/i);assert.equal(f.calls.length,0);
+ }
+});
+test('an unexpected linked comment author cannot be claimed as a valid request',async()=>{
+ const f=linkedFixture();f.requester.api=async(path,body)=>({id:55,body:body.body,user:{...linkedUser,id:999}});
+ await assert.rejects(requestConnectorReview(f.input),/identity|requester/i);
+});
+test('linked credential resolves the authenticated human without leaking it into repository data',async()=>{
+ const {linkedConnectorRequester}=await import('../review/connector-requester.mjs');const calls=[];
+ const fetchImpl=async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({...linkedUser,email:'private@example.test'})};};
+ const requester=await linkedConnectorRequester({repository:'owner/repo',token:'fixture-token',fetchImpl});
+ assert.deepEqual(requester.user,linkedUser);assert.equal(typeof requester.api,'function');assert.equal(calls.length,1);assert.equal(calls[0].url,'https://api.github.com/user');assert.equal(calls[0].options.redirect,'error');assert.equal(calls[0].options.headers.authorization,'Bearer fixture-token');
+});
+test('linked credential lookup fails closed for missing credentials, errors and bot identities',async()=>{
+ const {linkedConnectorRequester}=await import('../review/connector-requester.mjs');let reads=0;
+ const fetchImpl=async()=>{reads++;return {ok:true,json:async()=>linkedUser};};
+ await assert.rejects(linkedConnectorRequester({repository:'owner/repo',token:'',fetchImpl}),/credential|token/i);assert.equal(reads,0);
+ await assert.rejects(linkedConnectorRequester({repository:'owner/repo',token:'fixture-token',fetchImpl:async()=>({ok:false,status:401})}),/401/);
+ await assert.rejects(linkedConnectorRequester({repository:'owner/repo',token:'fixture-token',fetchImpl:async()=>({ok:true,json:async()=>({...linkedUser,type:'Bot'})})}),/human|user/i);
+});
+
+test('missing or nonstring linked logins are not coerced into valid identities',async()=>{
+ const {linkedConnectorRequester}=await import('../review/connector-requester.mjs');
+ for(const login of [undefined,123])await assert.rejects(linkedConnectorRequester({repository:'owner/repo',token:'fixture-token',fetchImpl:async()=>({ok:true,json:async()=>({...linkedUser,login})})}),/human|user/i);
+});

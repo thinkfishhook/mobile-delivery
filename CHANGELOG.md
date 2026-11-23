@@ -5,6 +5,12 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Connector prototype can separate workflow-owned review PRs from an authenticated human
+  requester, with an optional GitHub-only comment credential, identity-bound deduplication
+  and lost-response reconciliation. Automated use remains pending live acceptance.
+
 ## [1.1.2] - 2026-11-22
 
 ### Fixed

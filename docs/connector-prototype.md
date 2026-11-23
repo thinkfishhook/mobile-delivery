@@ -8,12 +8,13 @@ review. This prototype checks the next boundary: an Actions-authored PR and requ
 `Connector review prototype` is opt-in `workflow_dispatch` in the shared tool repository.
 Supply an exact source commit and its authoritative first parent. The driver reads those
 identities from GitHub, creates immutable disposable `codex/review/.../base` and `head`
-refs and opens a review-only PR between them as the workflow bot. The current trial
+refs and opens a review-only PR between them as the workflow bot. The default trial
 relies solely on the repository’s Automatic review / All PRs / On PR open setting; it
-posts no `@codex` mention. The PR never targets main/trunk. Existing refs/PRs/triggers are reused; moved refs,
+posts no mention. An optional linked-requester trial is described below. The PR never targets main/trunk. Existing refs/PRs/triggers are reused; moved refs,
 closed human decisions and ambiguous identities fail without force updates or reopening.
 No repository source from the requested commits executes in the workflow. It receives
-only its scoped GitHub token, no OpenAI key or app/signing credentials. Model identity is
+its scoped workflow token and, only in the optional linked mode, a separate GitHub
+requester token. It receives no OpenAI key or app/signing credentials. Model identity is
 reported as Connector-managed/not provided; do not substitute the local hook model.
 
 A successful workflow means only that the request was created. Inspect the trusted
@@ -94,3 +95,34 @@ base/source pairs reuse their immutable transport identities without another rev
 The manual prototype workflow still requests one first-parent pair. Combined-range
 request support alone does not establish aggregate completion, automatic authentication,
 issue-publication integration or consumer rollout. Those remain acceptance work in #24.
+
+
+## Linked requester prototype
+
+After global personal Automatic review was enabled, human-authored implementation PR38
+and the same-source/same-disposable-base control PR40 completed automatically. Bot PR39
+had no native summary during the observation window. A human-authenticated mention on
+that existing bot PR then completed for the exact head. This demonstrates a working
+requester path; it does not prove that every bot-authored automatic request is unsupported.
+
+The optional `linked-mention` prototype keeps branch and PR creation on `GITHUB_TOKEN`
+while a separate authenticated GitHub user posts the review request. The user must already
+be connected to the Connector. The driver verifies the credential’s user identity before
+creating refs or a PR. Only the comment writer uses that credential; existing comments
+are matched to the exact authenticated user, and a lost response is reconciled before
+retrying. Missing credentials, bots and mismatched authors remain explicit failures.
+The automatic trial remains the default and does not receive the linked credential.
+
+For the shared-repository trial, prepare a fine-grained GitHub token owned by the linked
+user, resource owner `thinkfishhook`, selected repository `mobile-delivery`, with **Issues:
+read and write** (plus GitHub’s implicit Metadata read). No Contents or Actions write is
+needed by this token: the workflow’s own token owns refs/PRs. Save it directly as repository
+Actions secret `CODEX_CONNECTOR_REQUEST_TOKEN`; never paste its value into chat, tracked
+files or workflow inputs. This is GitHub request authentication, not an OpenAI API key.
+
+Dispatch `Connector review prototype` with `trigger=linked-mention` and a fresh, real exact
+parent/source pair after the secret exists. A successful request still means only that
+the request was created. Require trusted exact-head native completion before acceptance.
+Automated credential use, full aggregate transport/publication and consumer rollout remain
+pending live validation. Provider/model identity stays Connector-managed/unreported, and
+no review result or setup failure gates delivery.
