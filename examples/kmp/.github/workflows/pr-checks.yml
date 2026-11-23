@@ -2,7 +2,7 @@ name: Pull request checks
 on:
   pull_request:
     branches: [trunk]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 permissions:
   contents: read
 jobs:
@@ -24,9 +24,9 @@ jobs:
   verify:
     name: Verify PR
     needs: source
-    runs-on: macos-26 # CHANGE ME: hosted macOS or existing self-hosted labels
+    runs-on: macos-26 # isolated hosted Apple Silicon; never the signing runner
     timeout-minutes: 330
-    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    concurrency: { group: "pr-verification-${{ github.event.pull_request.number }}", cancel-in-progress: true }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

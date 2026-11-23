@@ -11,7 +11,7 @@ class PrIntegrationTest {
     private val kinds = listOf("xcode", "kmp", "quickstart")
 
     @Test
-    fun `PR verification refuses forks before using a self hosted runner`() {
+    fun `PR verification refuses forks and isolates admitted code on hosted Macs`() {
         for (kind in kinds) {
             val doc =
                 workflowDocument(
@@ -45,6 +45,13 @@ class PrIntegrationTest {
                 ),
             )
             val verify = yamlMapping(jobs["verify"])
+            assertEquals("macos-26", verify["runs-on"])
+            val queue = yamlMapping(verify["concurrency"])
+            assertEquals(
+                "pr-verification-${'$'}{{ github.event.pull_request.number }}",
+                queue["group"],
+            )
+            assertEquals(true, queue["cancel-in-progress"])
             assertEquals("source", verify["needs"])
             assertNull(verify["if"])
             assertTrue(secretReferences(verify.toString()).isEmpty())
@@ -76,10 +83,32 @@ class PrIntegrationTest {
         }
     }
 
-    private fun execute(script: String, values: Map<String, String>): Int {
+    @Test
+    fun `publishing composite smoke checks require PR rejection`() = temp { directory ->
+        val document =
+            workflowDocument(root.resolve(".github/workflows/composite-self-test.yml").readText())
+        val jobs = yamlMapping(document["jobs"])
+        for (name in listOf("disabled-rollout", "disabled-release", "disabled-testflight")) {
+            val script = workflowSteps(yamlMapping(jobs[name])).last()["run"].toString()
+            val values =
+                mapOf(
+                    "EVENT" to "pull_request",
+                    "RESULT" to "failure",
+                    "DELIVERY_COMPOSITE" to "true",
+                    "PUBLISHED" to "false",
+                    "OPERATION" to "",
+                    "VERIFIED_SHA" to "",
+                )
+            assertEquals(0, execute(script, values, directory), name)
+            assertNotEquals(0, execute(script, values + ("RESULT" to "success"), directory), name)
+        }
+    }
+
+    private fun execute(script: String, values: Map<String, String>, directory: Path? = null): Int {
         val process =
-            ProcessBuilder("bash", "-c", script)
+            ProcessBuilder("bash", "-e", "-o", "pipefail", "-c", script)
                 .redirectErrorStream(true)
+                .directory(directory?.toFile())
                 .apply { environment().putAll(values) }
                 .start()
         if (!process.waitFor(5, TimeUnit.SECONDS)) {

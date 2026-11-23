@@ -20,7 +20,11 @@ current integration commit before pushing changed commits; this publishes no new
 candidate. Setup and verification use the same source. Admission runs on Ubuntu and refuses
 forks before using app runners. The required `PR checks` result passes only when admission
 and verification both succeed; failures, cancellation and skipped work cannot pass it.
-PR verification receives no signing, receipt, upload or provider credentials.
+PR verification runs on fresh GitHub-hosted Apple Silicon Macs, separate from persistent
+integration/signing runners. It receives no signing, receipt, upload or provider credentials.
+The hosted image provides the configured Xcode 26.6 and iOS 26.5 simulator. PR edits,
+including retargeting the base, rerun checks; prepare the title/body before opening when possible.
+Each PR has its own cancellable verification group and cannot occupy the delivery queue.
 
 BigAndPip additionally runs its Linux and Windows installer checks on every PR, with stable
 required names. Its integration-push installer path filters are retained. The shared tool
