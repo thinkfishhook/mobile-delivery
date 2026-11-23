@@ -36,6 +36,10 @@ PRs, zero required human approvals, required Actions checks and up-to-date sourc
 rules to administrators, prevent force pushes/deletion and retain linear history. Native
 required checks are the merge gate; Codex approval and conversation resolution are not.
 If the target branch advances, update the topic branch and obtain fresh required checks.
+If GitHub cannot rebase a green PR automatically, rebase the topic branch onto the current
+integration branch locally, resolve conflicts and rerun checks. Push the updated topic
+branch with `--force-with-lease`, then enable rebase auto-merge for its new head. Keep the
+integration branch protected; do not switch to a squash or merge commit to bypass this.
 
 Auto-merge must be enabled on each PR. Agents do this immediately through the developer's
 existing `gh` login. When opening a PR on the web, select auto-merge with rebase. Do not
