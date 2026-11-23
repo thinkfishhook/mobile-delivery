@@ -1,8 +1,8 @@
 # Contributing
 
 Use short-lived branches and normal pull requests into `trunk`. Open PRs through the
-existing authenticated developer account and enable native squash auto-merge immediately:
-`gh pr merge --auto --squash --match-head-commit "$(git rev-parse HEAD)"`.
+existing authenticated developer account and enable native rebase auto-merge immediately:
+`gh pr merge --auto --rebase --match-head-commit "$(git rev-parse HEAD)"`.
 Required Actions checks must pass; Codex App feedback stays advisory. Do not push normal
 changes directly to `trunk` or add a personal-token merge/review controller. See the
 [PR workflow](docs/pr-workflow.md). Link the issue and acceptance evidence, keep commits

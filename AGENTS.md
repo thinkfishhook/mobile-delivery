@@ -5,8 +5,8 @@ into `trunk`; do not push normal changes directly to the integration branch. Pre
 existing local risk-review hooks and test-first behavior changes.
 
 Open the PR through the existing authenticated developer `gh` account with a clear title
-and `--body-file`. Immediately enable native squash auto-merge with
-`gh pr merge --auto --squash --match-head-commit "$(git rev-parse HEAD)"`.
+and `--body-file`. Immediately enable native rebase auto-merge with
+`gh pr merge --auto --rebase --match-head-commit "$(git rev-parse HEAD)"`.
 Wait for required checks, fix failures and update the branch if the base advances. Do not
 bypass checks or substitute a GitHub Actions merge controller. Zero human approvals are
 required; Codex App review remains advisory and inline.

@@ -2,11 +2,11 @@
 
 Make each change on a short-lived branch from the current integration branch. Open a
 normal PR through your existing authenticated GitHub account, then enable GitHub native
-squash auto-merge. Do not push normal changes directly to main/trunk.
+rebase auto-merge. Do not push normal changes directly to main/trunk.
 
 ```sh
 gh pr create --base trunk --title "Describe the change" --body-file /path/to/pr-description.md
-gh pr merge --auto --squash --match-head-commit "$(git rev-parse HEAD)"
+gh pr merge --auto --rebase --match-head-commit "$(git rev-parse HEAD)"
 ```
 
 Use `main` for ExpressiveVocab and `trunk` for CordKeeper, BigAndPip and mobile-delivery.
@@ -31,14 +31,14 @@ required names. Its integration-push installer path filters are retained. The sh
 requires its Check, engine matrix and composite smoke tests. Integration-only pushes and
 PR events avoid duplicate branch-push verification.
 
-Enable repository auto-merge and allow only squash merging. Protect main/trunk with required
+Enable repository auto-merge and allow only rebase merging. Protect main/trunk with required
 PRs, zero required human approvals, required Actions checks and up-to-date source. Apply
 rules to administrators, prevent force pushes/deletion and retain linear history. Native
 required checks are the merge gate; Codex approval and conversation resolution are not.
 If the target branch advances, update the topic branch and obtain fresh required checks.
 
 Auto-merge must be enabled on each PR. Agents do this immediately through the developer's
-existing `gh` login. When opening a PR on the web, select auto-merge with squash. Do not
+existing `gh` login. When opening a PR on the web, select auto-merge with rebase. Do not
 introduce a workflow that merges with `GITHUB_TOKEN`: its resulting events can fail to
 start downstream workflows. No personal-token secret or custom merge controller is needed.
 
@@ -55,9 +55,10 @@ finishes before merging. Useful follow-up issues can be created through normal h
 
 ## Delivery after merge
 
-The squash merge creates the integration commit. The existing integration CI verifies that
-exact commit, then prepares one signed package. TestFlight Deploy uploads that run's exact
-package and records the same source/digest. A PR package cannot substitute for the new
+Rebase-and-merge retains each nonempty PR commit separately and adds no merge commit.
+GitHub rewrites commit hashes during the rebase. The existing integration CI verifies the
+resulting integration head, then prepares one signed package. TestFlight Deploy uploads
+that run's exact package and records the same source/digest. A PR package cannot substitute for the new
 integration commit. Failure reporting, paused-delivery switches, App Store schedules,
 receipt recovery and branch-safe numbering retain their existing contracts.
 
