@@ -4,9 +4,10 @@ mobile-delivery v1 serves Fish Hook’s portfolio from the public
 [`thinkfishhook/mobile-delivery`](https://github.com/thinkfishhook/mobile-delivery) repository.
 The shared actions verify native Xcode and Kotlin Multiplatform apps, prepare signed
 packages, deliver them to TestFlight and manage release recovery. Your repository owns
-runners, configuration and credentials. The default copy-in workflows separate **Continuous
-Integration**, **TestFlight Deploy** and **AI Code Review**. Hosted findings and provider
-failures never gate deployment. Local pre-push risk review composes existing hooks.
+runners, configuration and credentials. The default copy-in workflows use **Pull request checks**, **Continuous Integration**
+and **TestFlight Deploy**. Normal PRs squash-merge after required checks; the installed
+Codex App reviews them inline and stays advisory. Follow the [PR workflow](docs/pr-workflow.md).
+Local pre-push risk review composes existing hooks.
 
 ## Quick start
 
@@ -21,7 +22,7 @@ evidence, without preparing or uploading a package. Follow the
 | --- | --- |
 | `ci` | Verify frozen integration source once; sign/export and retain a package when enabled |
 | `testflight-deploy` | Upload the exact successful CI package; manual branch build/upload without tests |
-| `ai-review` | Independently review exact landed pushes and publish findings as issues |
+| `ai-review` | Optional API-based landed-push review/Issue publisher; not used by the PR-first App workflow |
 | `report-failure` | Report workflow-boundary failures and credential recovery without engine setup |
 | `verify` | Read-only configured deterministic checks and retained evidence |
 | `select-xcode` | Read-only configured Xcode selection |
@@ -91,17 +92,17 @@ manages its own JDK 21. Install and authenticate the GitHub CLI locally (`gh aut
    Disabled verification does not require deployment secrets, so you may defer them
    until enabling TestFlight; any declared app build values are still required.
 
-4. **Configure hosted and local review.** Set a supported `AI_REVIEW_MODEL` repository
-   variable and `OPENAI_API_KEY` repository secret (or select Claude and its named secret).
-   Follow [hosted review](docs/hosted-review.md) and [local risk review](docs/local-risk-review.md).
-   Run the released CLI's `callerChecks` from the app root and pinned actionlint.
+4. **Configure native PR review and local review.** Enable the installed Codex App's
+   automatic PR review and retain the [local risk hook](docs/local-risk-review.md).
+   No provider API secret is needed for the App. Run the released CLI's `callerChecks`
+   from the app root and pinned actionlint. Configure required checks and native squash
+   auto-merge as described in the [PR workflow](docs/pr-workflow.md).
 
-5. **Commit and push to the configured delivery branch.** Open **Continuous Integration**.
-   Success means the configured reports contain tests with no failures or skips and the
-   evidence artifact is retained. No archive or upload should run. Missing Xcode or
-   simulator errors mean the configured version needs an installed match; queue or
-   permission errors include YAML to paste into the caller. You now have the first green
-   run with delivery disabled.
+5. **Open a normal PR and enable squash auto-merge.** `Pull request checks` verifies the
+   immutable merge candidate without signing/upload secrets. After the required checks
+   pass, the native squash merge triggers **Continuous Integration** on the integration
+   commit. With delivery disabled it retains verification evidence without archive/upload.
+   With delivery enabled it prepares the signed package for automatic TestFlight Deploy.
 
 ## Enable TestFlight
 
@@ -171,16 +172,10 @@ engine automatically.
 
 Receipt tags are pushed with `IOS_RECEIPT_TOKEN`, so they **do trigger workflows**.
 Check every app workflow with `on: push`, including CI unrelated to delivery. Prefer
-branch filters, as in the CI and AI overlays. For existing verification-only workflows, integration-only pushes plus PR events avoid
-branch/PR duplication. The split overlay instead keeps integration preparation separate
-from secret-free `dependency-ci.yml`, which handles only normal Dependabot PR events:
-
-```yaml
-on:
-  push:
-    branches: [main] # use your integration branch
-  pull_request:
-```
+branch filters. The split overlay uses integration-only push CI for signed preparation,
+and `pr-checks.yml` for ordinary PRs, including Dependabot. It verifies the immutable PR
+merge candidate without signing or upload credentials. Feature-branch pushes alone do
+not duplicate those PR checks. Native Codex App review needs no AI Actions workflow.
 
 If a workflow needs pushes on all branches, exclude both receipt namespaces:
 
@@ -312,8 +307,8 @@ The asc release (and its checksums) ships with the tool in `src/main/resources/t
 | `IOS_DISTRIBUTION_P12_BASE64`, `IOS_DISTRIBUTION_P12_PASSWORD`, `IOS_PROFILE_BASE64` | environment secrets | the archive step and the signing diagnostic |
 | `IOS_RECEIPT_TOKEN` | environment secret | steps that write receipt tags and Releases |
 | Names declared in `build_environment` | existing app environment secrets | verification and the archive |
-| `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` | repository secret | selected independent hosted reviewer only |
-| `AI_REVIEW_MODEL` | repository variable | explicit supported hosted-review model |
+| `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` | optional repository secret | API-based reviewer only; not needed for Codex App PR review |
+| `AI_REVIEW_MODEL` | optional repository variable | API-based reviewer model only |
 | `IOS_DELIVERY_ENABLED`, `IOS_APPSTORE_ENABLED` | repository or environment variables | in-job gates for delivery and App Store changes |
 
 Use existing individual secrets directly. For example, declare

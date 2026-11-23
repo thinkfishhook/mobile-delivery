@@ -1,4 +1,7 @@
-# Asynchronous landed-push review
+# Optional API-based landed-push review
+
+The current portfolio uses native Codex App PR review, described in [PR workflow](pr-workflow.md).
+The API-based action below remains supported for callers that explicitly choose it.
 
 Use a separate workflow named **AI Code Review**, filtered to the existing integration
 branch. It never participates in Continuous Integration's aggregate conclusion and has

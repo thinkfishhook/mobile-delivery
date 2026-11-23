@@ -1,123 +1,14 @@
-# Connector transport prototype
+# Retired review-only PR prototype
 
-The owner selected Connector-only hosted review, with a managed model and bot-created
-review-only PRs after direct integration pushes. The manually requested Connector already
-reviewed a real shared-tool PR, published a P2 finding, then completed a corrected-head
-review. This prototype checks the next boundary: an Actions-authored PR and request.
+The owner replaced the direct-push/review-only bot PR approach with normal developer-authored
+PRs and native squash auto-merge after required CI checks. Codex App reviews remain inline
+and advisory; automated finding-to-Issue publication is no longer part of this portfolio.
+See [PR workflow](pr-workflow.md) for current instructions.
 
-`Connector review prototype` is opt-in `workflow_dispatch` in the shared tool repository.
-Supply an exact source commit and its authoritative first parent. The driver reads those
-identities from GitHub, creates immutable disposable `codex/review/.../base` and `head`
-refs and opens a review-only PR between them as the workflow bot. The current trial
-relies solely on the repository’s Automatic review / All PRs / On PR open setting; it
-posts no `@codex` mention. The PR never targets main/trunk. Existing refs/PRs/triggers are reused; moved refs,
-closed human decisions and ambiguous identities fail without force updates or reopening.
-No repository source from the requested commits executes in the workflow. It receives
-only its scoped GitHub token, no OpenAI key or app/signing credentials. Model identity is
-reported as Connector-managed/not provided; do not substitute the local hook model.
+The active prototype workflow and driver are removed. No personal-requester token was
+created or retained. Historical controlled trials and their exact evidence remain in
+[issue24](https://github.com/thinkfishhook/mobile-delivery/issues/24) and Git history;
+request creation, passing CI or absent feedback were never counted as completed review.
 
-A successful workflow means only that the request was created. Inspect the trusted
-Connector's completion and exact reviewed head before claiming inference success or a
-clean review. No response, timeout, malformed state or mismatched head is incomplete.
-This first prototype accepts one exact parent/commit pair; it does not yet claim full
-multi-commit/initial/rewrite coverage or issue-publication acceptance.
-
-The next integration must cover every outgoing commit, including intermediate reversions,
-with explicit bounds/unsupported states, then normalize anchored P0–P3 native findings
-through the existing deduplicating publisher. Preserve human triage and closed decisions;
-provider/publication failures remain visible and never hold CI or deployment. Direct
-main/trunk development remains the app workflow; review PRs are an internal transport.
-
-## Native evidence boundary
-
-The Actions trial created review-only PR #26, but its bot-authored mention received an
-account-link prompt rather than native inference. Human-authored requests have completed
-and produced useful P2 findings. Repository automatic-review authentication remains under
-investigation; request creation is not acceptance of this mode.
-
-`review/connector-evidence.mjs` reads the observed native v1 summary and finding markers.
-It requires the known Connector bot identity, exact immutable PR head/base, completed
-exact-head metadata, matching standard review receipts for findings, and complete bounded
-comment inventories. It retains P0–P3 priorities, native text and LEFT/RIGHT source identity;
-unknown formats, source movement, absent findings or contradictory state fail incomplete.
-It checks source/state again after collecting comments. The format is observed behavior,
-not a guaranteed public API. This reader alone does not publish issues or establish full
-landed-range coverage, automatic authentication or consumer acceptance.
-
-## Landed-range planning
-
-`review/connector-plan.mjs` plans fast-forward integration pushes before any GitHub write.
-It includes the combined landed diff and every added commit's first-parent diff, including
-merged side-branch commits and changes reverted later in the push. Identical views are
-requested once; tree-identical views are recorded explicitly as unchanged. A single-commit
-push therefore needs only one PR. The full existing immutable Git context bounds still
-apply, and more than 32 changed views is explicitly incomplete before request creation.
-Initial, deleted, rewritten, shallow or unavailable histories fail visibly; no subset is
-quietly accepted. The request prototype still accepts only one parent/commit pair until
-this planner and an aggregate-range transport are integrated and validated.
-
-## Native issue publication adapter
-
-`review/connector-publish.mjs` preserves native finding text/priority and reads each exact
-LEFT/RIGHT committed line before any issue write. It passes those anchors through the
-existing deduplicating publisher with provider `connector`, model `connector-managed`,
-and links to both the native PR comment and publication run. It does not invent separate
-impact, correction or risk classifications from the native prose. Existing owned issue
-blocks, urgent P0 handling, human edits and intentionally closed decisions are preserved.
-Unknown priorities, mismatched source/model, unavailable anchors or evidence exceeding the
-shared schema bound fail incomplete before publication. This adapter is fixture-tested;
-no live automatic publication or consumer acceptance is inferred until the workflow is
-integrated and a trusted bot-PR review completes.
-
-
-## Automatic PR-open trial
-
-The owner enabled repository Automatic review for All PRs, triggered on PR open, in the
-desktop app. Run45040245440 created bot-authored PR31; the old requester also posted a
-bot mention and received the account-link prompt. No automatic completion was observed.
-The current driver explicitly selects `trigger: automatic`, creating or reusing the owned
-review-only PR without reading or posting trigger comments. The helper’s default mention
-mode remains available for compatibility, and unknown modes fail before mutations.
-A reused PR does not generate a new open event; use a fresh real parent/commit pair for a
-new automatic trial, never reopen a human-closed PR or move an immutable source branch.
-
-
-## Combined-range request boundary
-
-The requester accepts an explicit `landed-range` view for the planner’s combined diff.
-Before creating any refs or PR it checks the exact source commit and GitHub’s authoritative
-comparison: the requested base must be the merge base, with a strictly ahead source and
-no behind commits. Diverged, missing or contradictory ancestry fails before writes. The
-existing first-parent default remains strict; unknown view modes are rejected. Identical
-base/source pairs reuse their immutable transport identities without another review.
-
-The manual prototype workflow still requests one first-parent pair. Combined-range
-request support alone does not establish aggregate completion, automatic authentication,
-issue-publication integration or consumer rollout. Those remain acceptance work in #24.
-
-
-## App-native investigation — November 22
-
-After personal Automatic review was enabled globally, human-authored PR38 completed
-automatically. Human control PR40 used the exact same head and disposable base as bot
-PR39 and also completed automatically. Bot PR39 had no native summary before a later
-human-authenticated request; that request then completed for the exact head. This narrows
-the observed difference to the actor/request path, without proving permanent bot
-incompatibility or a missing GitHub credential.
-
-The installed Connector App is active, selects all repositories and subscribes to
-`pull_request` events with the relevant repository permissions. Its private delivery
-and routing logs are controlled by the App owner. GitHub Actions recursion/approval rules
-do not by themselves prove that a third-party App webhook was absent.
-
-The proposed personal-requester-token workaround was withdrawn in favor of the selected
-App-native route. No requester credential was created or stored. The prototype remains
-automatic-only, and request creation alone is still incomplete until trusted exact-head
-native completion is observed. Keep this investigation independent of accepted consumer
-delivery.
-
-Bot PR39’s Check run45093722869 and Engine run45093722835 failed before starting
-any jobs. The rendered Actions summary says approval was required and expired. A fresh
-trial will promptly approve only its exact, already-tested workflow runs to isolate
-this variable; no repository-wide approval policy is changed. Native App completion
-still needs to be observed independently.
+Published optional API-review features remain compatible. No App trigger workaround or
+new runtime credential is needed for normal PRs opened through the developer account.

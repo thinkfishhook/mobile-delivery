@@ -28,7 +28,7 @@ example value, remove its marker. Never put secret values into these files.
 3. Match the native scheme and its shared `UnitTests`/`UITests` plans, or the KMP Gradle
    tasks and report directories. Every listed report must contain passing, unskipped
    tests. Select public fallback notes and tester instructions for your app.
-4. Set the same branch in all workflows and the CI, AI and dependency-PR branch filters. Choose
+4. Set the same branch in all workflows and the integration CI and PR-check branch filters. Choose
    hosted or self-hosted Mac labels for TestFlight and maintenance, then review the
    maintenance and App Store schedules. The App Store switch starts false.
 5. If builds need app secrets, add `build_environment` to the JSON with their names and
@@ -58,12 +58,12 @@ it to `stale.yml`. Never auto-close `testflight-hold` issues to lift a release h
 Finish with the main README: configure `ios-delivery`, add its secrets, set both switches
 to `false`, and push to get the first green verification run before enabling delivery.
 
-Use the separate CI, standalone deployment and independent AI workflows together. Remove
-the former all-in-one push trigger in the same migration. Do not add a main-only manual
-branch guard or artifact inputs. Configure one supported AI_REVIEW_MODEL and the selected
-repository provider secret. Run `mobile-delivery callerChecks` from the app checkout.
-See `docs/upgrade-v1.1.md` in the tool for the packaged local hook, safe rollback and exact
-live acceptance evidence; copying files alone does not establish a successful deployment.
+Use normal PRs, required `PR checks` and native squash auto-merge. Codex App reviews
+inline and remains advisory; no provider API workflow or key is part of this overlay.
+Merges trigger integration CI/preparation and exact-package TestFlight Deploy. Preserve
+switches, schedules, signing and existing checks. Follow `docs/pr-workflow.md` in the tool.
+Run `mobile-delivery callerChecks` from the app checkout; configuration alone does not
+establish a successful deployment.
 
-The v1.1.1 reporter requires Checks read. Use the matching v1.1.1 CLI; the previous
+The v1.1.1 reporter requires Checks read. Use a compatible v1.1.1 or newer CLI; the previous
 v1.1.0 validator rejects this corrected permission set.

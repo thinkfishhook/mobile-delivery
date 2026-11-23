@@ -1,0 +1,51 @@
+name: Pull request checks
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  source:
+    name: Admit PR source
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require a same-repository PR before using app runners
+        env:
+          SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ -z "$SOURCE_REPOSITORY" ] || [ "$SOURCE_REPOSITORY" != "$TARGET_REPOSITORY" ]; then
+            echo "::error::PR verification on app runners requires a same-repository source."
+            exit 1
+          fi
+  verify:
+    name: Verify PR
+    needs: source
+    runs-on: macos-26 # CHANGE ME: hosted macOS or existing self-hosted labels
+    timeout-minutes: 330
+    concurrency: { group: ios-delivery, queue: max, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }} # immutable PR merge candidate, matching verify checkout
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: thinkfishhook/mobile-delivery/verify@1050b2bf67c2e22289ee7452cf12bf089b6699ba # v1.1.1
+  checks:
+    name: PR checks
+    needs: [source, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require all verification prerequisites to pass
+        env:
+          SOURCE_RESULT: ${{ needs.source.result }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: |
+          test "$SOURCE_RESULT" = success &&
+            test "$VERIFY_RESULT" = success

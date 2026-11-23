@@ -10,7 +10,7 @@ class QuickstartTest {
     private val overlay = repository.resolve("examples/quickstart")
 
     @Test
-    fun `quickstart covers the split action surface with one coherent full pin`() {
+    fun `quickstart uses split delivery with one full pin and native App review`() {
         val reference = Regex("thinkfishhook/mobile-delivery/([a-z-]+)@([a-f0-9]{40})")
         val files = overlay.resolve(".github/workflows").listDirectoryEntries("*.yml")
         val pins = files.flatMap { reference.findAll(it.readText()).toList() }
@@ -18,7 +18,6 @@ class QuickstartTest {
             setOf(
                 "ci",
                 "testflight-deploy",
-                "ai-review",
                 "report-failure",
                 "verify",
                 "maintenance",

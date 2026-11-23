@@ -30,22 +30,17 @@ explicitly labelled implementation-candidate pins.
    an older success cannot bypass a newer pending, red or cancelled commit. Already accepted
    Apple uploads continue recovery. Explicit manual choices are not invalidated by branch
    movement. Do not add a main-only dispatch guard or CI/AI prerequisite to manual delivery.
-4. Add the independent boundary reporter jobs exactly as shown. Reporters run on Ubuntu
-   after their named operation even if checkout/setup fails, with no app credentials.
-   Their own queue prevents duplicate incidents. Reporter permissions include `checks: read`
-   for check-run annotation retrieval, alongside Contents/Actions read and Issues write. Keep AI review in its own workflow,
-   never in CI/deploy aggregate success. Configure one provider, a supported explicit
-   `AI_REVIEW_MODEL` repository variable and its repository API secret (`OPENAI_API_KEY`
-   for Codex). An installed GitHub App does not provide this runtime key. P1–P3 and urgent
-   P0 findings create issues; no finding or review outage holds deployment.
-5. Use `dependency-ci.yml` for normal same-repository Dependabot PR opened/synchronize
-   events. Both setup and read-only `verify` check out the immutable event `github.sha`
-   (the PR merge candidate), so setup and verification use the same source. The PR head
-   remains the event/check association; it is not a second source selection. Verification receives no
-   Apple/signing credentials. Do not combine broad branch pushes with those same PR
-   events. Observe a normal update and count each expected workflow/event/attempt once.
-   Multiple jobs are not duplicate runs. Keep the `thinkfishhook/mobile-delivery*`
-   Dependabot group so every used action path advances coherently.
+4. Add independent boundary reporter jobs exactly as shown. Reporters run on Ubuntu
+   even if operation setup fails, with Contents/Actions/Checks read and Issues write.
+   The selected Codex App reviews normal PRs inline; no provider API workflow or secret
+   is required. Its findings do not gate CI or deployment. The separate API-based action
+   remains an optional supported feature described in hosted-review.md.
+5. Use `pr-checks.yml` for normal same-repository PRs, including Dependabot. Admission
+   rejects forks before app-runner use; required `PR checks` passes only after complete
+   verification. Setup and shared verify use the immutable event merge candidate
+   `github.sha`. Keep existing app checks, no PR signing/Apple credentials and no feature
+   push duplicate. Configure native squash auto-merge and required checks using
+   [the PR workflow](pr-workflow.md). Retain the grouped dependency rule.
 6. Validate with the CLI from the same compatible release as the action pins. Download
    the current stable release zip and verify its checksum. The v1.1.2 local review
    runtime includes scoped shallow-history checks and explicit immutable dependency context;
