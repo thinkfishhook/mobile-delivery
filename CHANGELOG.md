@@ -5,6 +5,12 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Default callers use ordinary PR verification and native squash auto-merge, with inline
+  advisory Codex App review. Integration commits retain signed preparation and deployment.
+- Retired the active review-only bot PR prototype; API-based review remains optional.
+
 ## [1.1.2] - 2026-11-22
 
 ### Fixed

@@ -1,8 +1,12 @@
 # Contributing
 
-Use trunk-based development: make one small, complete change at a time and integrate it
-frequently into `trunk`. Link the issue and acceptance evidence. Keep commits atomic;
-separate unrelated fixes and configuration changes. Avoid long-lived branches.
+Use short-lived branches and normal pull requests into `trunk`. Open PRs through the
+existing authenticated developer account and enable native squash auto-merge immediately:
+`gh pr merge --auto --squash --match-head-commit "$(git rev-parse HEAD)"`.
+Required Actions checks must pass; Codex App feedback stays advisory. Do not push normal
+changes directly to `trunk` or add a personal-token merge/review controller. See the
+[PR workflow](docs/pr-workflow.md). Link the issue and acceptance evidence, keep commits
+atomic and avoid long-lived branches.
 
 For behavior changes, write a failing automated test first, implement the smallest complete
 fix, and refactor while tests stay green. Cover observable behavior and failure boundaries,

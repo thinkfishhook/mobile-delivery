@@ -1,7 +1,10 @@
 name: Composite self-test
 on:
   push:
-    branches: ['**']
+    branches: [trunk]
+  pull_request:
+    branches: [trunk]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   schedule:
     - cron: '13 0 * * 6'
   workflow_dispatch:
@@ -36,7 +39,7 @@ jobs:
           [[ "$DELIVERY_COMPOSITE" == 'true' ]]
           case "$EVENT" in
             push|schedule) [[ "$RESULT" == 'success' ]] ;;
-            workflow_dispatch) [[ "$RESULT" == 'failure' ]] ;;
+            workflow_dispatch|pull_request) [[ "$RESULT" == 'failure' ]] ;;
             *) exit 1 ;;
           esac
   disabled-release:
@@ -69,7 +72,7 @@ jobs:
           [[ "$DELIVERY_COMPOSITE" == 'true' ]]
           case "$EVENT" in
             push|schedule) [[ "$RESULT" == 'success' ]] ;;
-            workflow_dispatch) [[ "$RESULT" == 'failure' ]] ;;
+            workflow_dispatch|pull_request) [[ "$RESULT" == 'failure' ]] ;;
             *) exit 1 ;;
           esac
   disabled-testflight:
@@ -122,6 +125,12 @@ jobs:
           PUBLISHED: ${{ steps.testflight.outputs.published }}
           VERIFIED_SHA: ${{ steps.testflight.outputs.sha }}
         run: |
+          if [[ "$EVENT" == 'pull_request' ]]; then
+            [[ "$DELIVERY_COMPOSITE" == 'true' && "$RESULT" == 'failure' && "$PUBLISHED" != 'true' ]] || exit 1
+            [[ -z "$OPERATION" && -z "$VERIFIED_SHA" ]] || exit 1
+            [[ ! -d build/ci-verification && ! -d build/ios ]] || exit 1
+            exit 0
+          fi
           [[ "$DELIVERY_COMPOSITE" == 'true' && "$PUBLISHED" == 'false' ]]
           [[ "${JAVA_HOME-__UNSET__}" == "$(cat "$RUNNER_TEMP/testflight-java-home")" ]]
           [[ "$(command -v java)" == "$(cat "$RUNNER_TEMP/testflight-java-path")" ]]

@@ -3,8 +3,10 @@ name: Check
 # Tests, Detekt, formatting and composite and CI workflow safety properties.
 on:
   push:
-    branches: ['**']
+    branches: [trunk]
   pull_request:
+    branches: [trunk]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 
 permissions:
   contents: read
