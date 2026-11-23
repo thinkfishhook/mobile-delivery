@@ -80,3 +80,17 @@ review-only PR without reading or posting trigger comments. The helper’s defau
 mode remains available for compatibility, and unknown modes fail before mutations.
 A reused PR does not generate a new open event; use a fresh real parent/commit pair for a
 new automatic trial, never reopen a human-closed PR or move an immutable source branch.
+
+
+## Combined-range request boundary
+
+The requester accepts an explicit `landed-range` view for the planner’s combined diff.
+Before creating any refs or PR it checks the exact source commit and GitHub’s authoritative
+comparison: the requested base must be the merge base, with a strictly ahead source and
+no behind commits. Diverged, missing or contradictory ancestry fails before writes. The
+existing first-parent default remains strict; unknown view modes are rejected. Identical
+base/source pairs reuse their immutable transport identities without another review.
+
+The manual prototype workflow still requests one first-parent pair. Combined-range
+request support alone does not establish aggregate completion, automatic authentication,
+issue-publication integration or consumer rollout. Those remain acceptance work in #24.

@@ -64,3 +64,26 @@ test('automatic reruns reuse the PR without adding a manual trigger',async()=>{
 test('unknown review trigger modes fail before any GitHub mutation',async()=>{
  const f=fixture();await assert.rejects(requestConnectorReview({api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',trigger:'unknown'}),/trigger/);assert.equal(f.refs.size,0);assert.equal(f.pulls.length,0);
 });
+
+test('combined landed ranges require authoritative ancestor proof before opening one exact review',async()=>{
+ const f=fixture(),parent='c'.repeat(40);
+ const api=async(path,body,method)=>{
+  if(path===`git/commits/${after}`)return {sha:after,parents:[{sha:parent}]};
+  if(path===`compare/${before}...${after}`)return {status:'ahead',ahead_by:3,behind_by:0,base_commit:{sha:before},merge_base_commit:{sha:before}};
+  return f.api(path,body,method);
+ };
+ const result=await requestConnectorReview({api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',trigger:'automatic',view:'landed-range'});
+ assert.equal(result.view,'landed-range');assert.deepEqual([...f.refs.values()],[before,after]);assert.equal(f.pulls.length,1);assert.equal(f.comments.length,0);
+ assert.match(f.pulls[0].body,/combined landed range/i);assert.doesNotMatch(f.pulls[0].body,/First parent:/);
+});
+test('diverged, contradictory and missing combined-range ancestry fail before writes',async()=>{
+ for(const change of [{status:'diverged'},{ahead_by:0},{behind_by:1},{base_commit:{sha:'c'.repeat(40)}},{merge_base_commit:{sha:'c'.repeat(40)}}]){
+  const f=fixture();const api=async(path,body,method)=>path.startsWith('compare/')?{status:'ahead',ahead_by:3,behind_by:0,base_commit:{sha:before},merge_base_commit:{sha:before},...change}:f.api(path,body,method);
+  await assert.rejects(requestConnectorReview({api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',view:'landed-range'}),/ancestor|range/);
+  assert.equal(f.refs.size,0);assert.equal(f.pulls.length,0);
+ }
+ const f=fixture();await assert.rejects(requestConnectorReview({api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',view:'landed-range'}));assert.equal(f.refs.size,0);
+});
+test('unknown source-view modes fail before any GitHub read or mutation',async()=>{
+ const f=fixture();await assert.rejects(requestConnectorReview({api:f.api,repository:'owner/repo',before,after,runUrl:'https://github.com/owner/repo/actions/runs/1',view:'latest'}),/view/);assert.equal(f.calls.length,0);
+});
