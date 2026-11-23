@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 const oid = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 const check = (value,message) => { if(!value) throw Error(message); };
-export async function requestConnectorReview({api,repository,before,after,runUrl,trigger='mention',view='first-parent'}) {
- check(['mention','automatic'].includes(trigger),'Expected a supported review trigger');
+export async function requestConnectorReview({api,repository,before,after,runUrl,trigger='mention',view='first-parent',requester}) {
+ check(['mention','automatic','linked-mention'].includes(trigger),'Expected a supported review trigger');
  check(['first-parent','landed-range'].includes(view),'Expected a supported source view');
+ if(trigger==='linked-mention')check(typeof requester?.api==='function'&&requester.user?.type==='User'&&Number.isSafeInteger(requester.user.id)&&requester.user.id>0&&typeof requester.user.login==='string'&&/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(requester.user.login),'Expected an authenticated linked human requester');
  check(/^[\w.-]+\/[\w.-]+$/.test(repository)&&oid(before)&&oid(after)&&before!==after,'Expected distinct exact base/source commits');
  const prefix=`https://github.com/${repository}/actions/runs/`;
  check(runUrl.startsWith(prefix)&&/^[1-9]\d*(?:\/attempts\/[1-9]\d*)?$/.test(runUrl.slice(prefix.length)),'Expected the exact caller-repository run URL');
@@ -37,12 +38,20 @@ export async function requestConnectorReview({api,repository,before,after,runUrl
   try{pr=await api('pulls',{title:`Codex review only: ${after.slice(0,12)}`,head,base,body});}
   catch(error){pr=await locate();if(!pr)throw error;}
  }
- check(pr.body?.includes(marker)&&pr.head?.sha===after&&pr.base?.sha===before&&pr.head?.ref===head&&pr.base?.ref===base,'Review PR does not match its exact owned source');
+ check(Number.isSafeInteger(pr.number)&&pr.number>0&&pr.body?.includes(marker)&&pr.head?.sha===after&&pr.base?.sha===before&&pr.head?.ref===head&&pr.base?.ref===base,'Review PR does not match its exact owned source');
  check(pr.state==='open','A human closed this review PR; preserve that decision');
- if(trigger==='mention'){
-  const comments=await api(`issues/${pr.number}/comments?per_page=100`);
-  check(Array.isArray(comments)&&comments.length<100,'Review trigger inventory is incomplete');
-  if(!comments.some(c=>c.body==='@codex review'&&c.user?.login==='github-actions[bot]'))await api(`issues/${pr.number}/comments`,{body:'@codex review'});
+ if(trigger!=='automatic'){
+  const comments=async()=>{
+   const values=await api(`issues/${pr.number}/comments?per_page=100`);
+   check(Array.isArray(values)&&values.length<100,'Review trigger inventory is incomplete');return values;
+  };
+  const matches=comment=>comment.body==='@codex review'&&(trigger==='linked-mention'?comment.user?.id===requester.user.id&&comment.user.login===requester.user.login&&comment.user.type==='User':comment.user?.login==='github-actions[bot]');
+  if(!(await comments()).some(matches)){
+   try{
+    const created=await (trigger==='linked-mention'?requester.api:api)(`issues/${pr.number}/comments`,{body:'@codex review'});
+    if(trigger==='linked-mention')check(created&&matches(created),'Linked requester comment identity differs from authenticated requester');
+   }catch(error){if(!(await comments()).some(matches))throw error;}
+  }
  }
- return {number:pr.number,url:pr.html_url,before,after,base,head,trigger,view,requested:true,complete:false};
+ return {number:pr.number,url:pr.html_url,before,after,base,head,trigger,view,...(trigger==='linked-mention'?{requestedBy:{id:requester.user.id,login:requester.user.login}}:{}),requested:true,complete:false};
 }
