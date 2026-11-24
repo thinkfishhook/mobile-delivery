@@ -26,6 +26,10 @@ internal fun runTask(
 ) {
     val mode = args.firstOrNull() ?: error("Specify a delivery task")
     when (mode) {
+        "archive-local" -> {
+            localArchive(args.drop(1), root, env, commands)
+            return
+        }
         "configureComposite" -> {
             configureComposite(env, root)
             return

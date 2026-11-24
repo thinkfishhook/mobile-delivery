@@ -5,7 +5,7 @@ import kotlinx.serialization.descriptors.*
 import kotlinx.serialization.json.*
 
 // Walk the serialization schema so the validator and the model cannot disagree on keys.
-internal fun configurationProblems(text: String): List<String> {
+internal fun configurationProblems(text: String, archiveOnly: Boolean = false): List<String> {
     val document =
         try {
             json.parseToJsonElement(text)
@@ -13,7 +13,13 @@ internal fun configurationProblems(text: String): List<String> {
             return listOf("invalid JSON")
         }
     val problems = mutableListOf<String>()
-    validateShape(document, DeliveryConfig.serializer().descriptor, "", problems)
+    validateShape(
+        document,
+        DeliveryConfig.serializer().descriptor,
+        "",
+        problems,
+        if (archiveOnly) setOf("app_id", "internal_group") else emptySet(),
+    )
     val root = document as? JsonObject ?: return problems
     fun value(path: String): JsonElement? =
         path.split('.').fold(root as JsonElement?) { node, key ->
@@ -56,6 +62,7 @@ private fun validateShape(
     schema: SerialDescriptor,
     path: String,
     problems: MutableList<String>,
+    allowedBlank: Set<String> = emptySet(),
 ) {
     if (value == JsonNull && schema.isNullable) return
     when (schema.kind) {
@@ -78,22 +85,42 @@ private fun validateShape(
                     if (!schema.isElementOptional(index)) {
                         val childSchema = schema.getElementDescriptor(index)
                         if (childSchema.kind == StructureKind.CLASS)
-                            validateShape(JsonObject(emptyMap()), childSchema, key, problems)
+                            validateShape(
+                                JsonObject(emptyMap()),
+                                childSchema,
+                                key,
+                                problems,
+                                allowedBlank,
+                            )
                         else problems += "$key is missing"
                     }
-                } else validateShape(child, schema.getElementDescriptor(index), key, problems)
+                } else
+                    validateShape(
+                        child,
+                        schema.getElementDescriptor(index),
+                        key,
+                        problems,
+                        allowedBlank,
+                    )
             }
         }
         StructureKind.LIST -> {
             if (value !is JsonArray) problems += "$path must be an array"
             else
                 value.forEachIndexed { index, child ->
-                    validateShape(child, schema.getElementDescriptor(0), "$path[$index]", problems)
+                    validateShape(
+                        child,
+                        schema.getElementDescriptor(0),
+                        "$path[$index]",
+                        problems,
+                        allowedBlank,
+                    )
                 }
         }
         PrimitiveKind.STRING -> {
             if (value !is JsonPrimitive || !value.isString) problems += "$path must be a string"
-            else if (value.content.isBlank()) problems += "$path must not be blank"
+            else if (value.content.isBlank() && path !in allowedBlank)
+                problems += "$path must not be blank"
         }
         else -> Unit
     }

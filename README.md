@@ -104,6 +104,7 @@ remove it from review in App Store Connect or dispatch a rollout pause.
 
 ## More
 
+- [Build a signed IPA locally with an existing keychain identity](docs/local-archive.md)
 - [Upgrade from all-in-one delivery](docs/upgrade-v1.1.md)
 - [Install the local pre-push review hook](docs/local-risk-review.md)
 - [Configure optional API-based landed-push review](docs/hosted-review.md)
