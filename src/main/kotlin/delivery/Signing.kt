@@ -20,6 +20,8 @@ fun writeArchiveEvidence(output: Path, build: Build) {
 
 data class SigningIdentity(val profile: String, val certificate: String)
 
+internal data class ArchiveFiles(val ipa: ArtifactFile, val symbols: ArtifactFile?)
+
 data class ProvisioningProfile(val uuid: String, val certificates: Set<String>)
 
 fun validateProfile(
@@ -212,6 +214,35 @@ class Signing(
     }
 
     fun archive(source: Path, output: Path, build: Build): Path = withIdentity { identity ->
+        val files = archiveWithIdentity(source, output, build, identity)
+        build.artifact =
+            ArtifactManifest(
+                schema = if (build.preparation == null) 1 else 2,
+                sha = build.sha,
+                version = build.version,
+                number = build.number,
+                workflow =
+                    requireNotNull(build.workflow) {
+                        "Build ${build.number} manifest requires its originating Actions run URL; no workflow was recorded"
+                    },
+                artifactName = artifactName(build.number),
+                ipa = files.ipa,
+                symbols = files.symbols,
+                symbolsAbsentReason =
+                    if (files.symbols == null) "Archive contained no dSYMs" else null,
+                preparation = build.preparation,
+            )
+        writeArchiveEvidence(output, build)
+        output.resolve(files.ipa.name)
+    }
+
+    // Shared native archive/export/verification path; provenance is supplied by its caller.
+    internal fun archiveWithIdentity(
+        source: Path,
+        output: Path,
+        build: Build,
+        identity: SigningIdentity,
+    ): ArchiveFiles {
         val archive = output.resolve("${config.ios.name}.xcarchive")
         val ipa = output.resolve("${config.ios.name}.ipa")
         val flags =
@@ -305,33 +336,14 @@ class Signing(
                     packageFile.fileSize(),
                 )
             } else null
-        build.artifact =
-            ArtifactManifest(
-                schema = if (build.preparation == null) 1 else 2,
-                sha = build.sha,
-                version = build.version,
-                number = build.number,
-                workflow =
-                    requireNotNull(build.workflow) {
-                        "Build ${build.number} manifest requires its originating Actions run URL; no workflow was recorded"
-                    },
-                artifactName = artifactName(build.number),
-                ipa =
-                    ArtifactFile(
-                        ipa.fileName.toString(),
-                        requireNotNull(build.ipaSha256) {
-                            "Build ${build.number} manifest requires a SHA-256 checksum for $ipa; export and hash the IPA first"
-                        },
-                        requireNotNull(build.ipaBytes) {
-                            "Build ${build.number} manifest requires a byte count for $ipa; export and measure the IPA first"
-                        },
-                    ),
-                symbols = symbols,
-                symbolsAbsentReason = if (symbols == null) "Archive contained no dSYMs" else null,
-                preparation = build.preparation,
-            )
-        writeArchiveEvidence(output, build)
-        ipa
+        return ArchiveFiles(
+            ArtifactFile(
+                ipa.fileName.toString(),
+                requireNotNull(build.ipaSha256) { "Verified IPA must have a SHA-256 digest" },
+                requireNotNull(build.ipaBytes) { "Verified IPA must have its byte count recorded" },
+            ),
+            symbols,
+        )
     }
 
     fun verifyIpa(ipa: Path, build: Build) {
