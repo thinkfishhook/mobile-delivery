@@ -16,7 +16,7 @@ branch with required PRs, required checks, up-to-date branches and linear histor
 Apply protection to administrators and prevent force pushes and deletion on that branch.
 Require zero human approvals. In this repository, require the Check, engine matrix and
 composite smoke checks. Apps should require the `PR checks` result in the
-[caller example](../examples/quickstart/.github/workflows/pr-checks.yml) and their existing
+[caller example](https://github.com/thinkfishhook/mobile-delivery/blob/trunk/examples/quickstart/.github/workflows/pr-checks.yml) and their existing
 app-specific checks.
 
 Use the installed Codex GitHub App for advisory inline review. Required Actions checks
