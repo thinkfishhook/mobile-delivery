@@ -22,6 +22,4 @@ The server returned `{"data":[]}` for 200, and JSON:API errors with `status`,
 | 500 | UNEXPECTED_ERROR | An unexpected error occurred. |
 
 The malformed recording used `ASC_PRIVATE_KEY=not a key` and made no HTTP
-request. Real 401/403 output omits the status but uses distinct titles/hints;
-both exit 3. The 500 exits 60. Tests also cover explicit HTTP status output and
-process timeouts separately. No real credentials or account identifiers were used.
+request.
