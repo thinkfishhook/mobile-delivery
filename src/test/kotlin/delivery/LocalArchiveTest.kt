@@ -50,7 +50,7 @@ class LocalArchiveTest {
         val installed =
             home.resolve("Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision")
         val environment =
-            buildEnvironment() +
+            buildEnvironment() - "GITHUB_ACTIONS" +
                 mapOf(
                     "HOME" to home.toString(),
                     "ASC_PRIVATE_KEY" to "not-for-builds",
