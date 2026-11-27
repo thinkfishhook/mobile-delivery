@@ -1,8 +1,7 @@
 # Real Xcode result summaries
 
 Captured on 2026-10-19 from a throwaway neutral Swift package, `ResultFixture`,
-using XCTest on macOS (not an iOS simulator). The user approved the installed
-Xcode 27.1 in place of the examples' Xcode 26.6 for this validation.
+using XCTest on macOS.
 
 - Xcode 27.1, build 27A9275
 - `xcresulttool version 25115, schema version: 0.4.0 (legacy commands format version: 3.60)`
@@ -50,39 +49,6 @@ The JSON was pretty-printed and each hardware `deviceId` replaced with
 unchanged. Only summaries are committed; the sample package, derived data, logs,
 and bundles were deleted after extraction.
 
-`XcresultTest` exercises the parser and the verification pipeline with these
-captured responses. Two passing bundles retain separate totals summing to three
-tests. A failed or zero-test second bundle blocks verification even when the
-first passes and the test command exits successfully. The zero-test capture
-demonstrates why a successful `xcodebuild` exit alone is insufficient. These
-fixtures validate the summary format and gate; live caller bundles remain part
-of each app's first delivery.
-
-## Compact failing-test tree fixture
-
-`test-failures.json` is synthetic, neutral `get test-results tests` JSON, shaped
-against the installed xcresulttool JSON schema (0.4.0). It contains a unit failure
-with a source location, a bare assertion without location, a passing test, and a
-UI failure nested inside a device and test-case run, as in parallel execution.
-No result bundles are committed.
-
-Run the fixture verification path with:
-
-```sh
-./gradlew test --tests delivery.XcresultFailureTest --rerun-tasks
-```
-
-The test captures and asserts workflow commands, then prints the fixture-run
-output into `build/test-results/test/TEST-delivery.XcresultFailureTest.xml`.
-For example, even though the fake build exits 65 and writes no assertion text:
-
-```text
-::error title=SampleTests/ValueTests/testValue(),file=Tests/ValueTests.swift,line=12::XCTAssertEqual failed: (1) is not equal to (2)
-::error title=SampleUITests/ScreenTests/testOpen()::Failed to find button
-```
-
-The parser emits one annotation per failed test case, combining repeated
-assertion messages for that case. At most nine test annotations are emitted:
-eight named tests plus an overflow count when necessary, leaving one of GitHub's
-ten error annotations per step for the existing command error. Unreadable bundles
-are logged without replacing the original error or hiding later bundles.
+`test-failures.json` is synthetic `get test-results tests` output based on
+xcresulttool schema 0.4.0. It includes failures with and without source locations
+and a UI failure nested in a parallel device run.
