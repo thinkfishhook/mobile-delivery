@@ -1,6 +1,6 @@
 # Upgrade to split delivery
 
-Use the [setup guide](../README.md) and a single compatible full release SHA across all
+Use the [setup guide](https://github.com/thinkfishhook/mobile-delivery#quick-start) and a single compatible full release SHA across all
 shared actions. The v1.1.1 reporter added Checks read, which the v1.1.0 caller validator
 rejects. Use a CLI at least as recent as v1.1.1 with those callers.
 
