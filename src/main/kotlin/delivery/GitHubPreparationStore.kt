@@ -46,6 +46,12 @@ class GitHubPreparationStore(private val github: GitHub) : PreparationStore {
         return PreparationSnapshot(revision, ledger.records)
     }
 
+    fun sealedPreparation(number: BuildNumber): Preparation? =
+        read()
+            .records
+            .singleOrNull { it.preparation.number == number && it.manifest != null }
+            ?.preparation
+
     override fun write(expected: PreparationSnapshot, records: List<PreparationRecord>): Boolean {
         PreparationSnapshot(expected.revision, records)
         require(

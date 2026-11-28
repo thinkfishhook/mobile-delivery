@@ -42,14 +42,18 @@ class AppStoreRelease(
         val receipts = tags.names("deploy/testflight/")
         val versions = apple.storeVersions()
         val builds = apple.testFlightBuilds()
-        val buildTags = builds.map { testFlightTag(it.version, it.number) }
-        val versionTags = versions.mapNotNull { version ->
-            version.buildNumber?.let { testFlightTag(version.version, it) }
+        val attachedBuildIds = versions.mapNotNull { version ->
+            val number = version.buildNumber ?: return@mapNotNull null
+            version.buildId?.let { testFlightTag(version.version, number) to it }
         }
+        val observedBuildIds =
+            (attachedBuildIds + builds.map { testFlightTag(it.version, it.number) to it.id })
+                .groupBy({ it.first }, { it.second })
+                .mapValues { (_, ids) -> ids.distinct().singleOrNull() }
         val reserved = preparations().associateBy { it.preparation.number.value }
         // Historical count.attempt receipts need no annotation read during a normal sweep.
         val relevant =
-            (buildTags + versionTags)
+            observedBuildIds.keys
                 .intersect(receipts)
                 .filter { tag ->
                     val number = tag.substringAfterLast('/')
@@ -74,8 +78,14 @@ class AppStoreRelease(
                     relevant
                         .filter { (tag, receipt) ->
                             val record = reserved[tag.substringAfterLast('/')]
+                            val appleBuildId = observedBuildIds[tag]
                             (record != null && record.manifest == null) ||
-                                !qualifiesForPromotion(receipt, expected[tag])
+                                receipt?.ascBuildId != appleBuildId ||
+                                !qualifiesForPromotion(
+                                    receipt,
+                                    expected[tag],
+                                    appleBuildId?.takeIf { record?.manifest != null },
+                                )
                         }
                         .keys,
                 preparations = expected,
@@ -114,10 +124,11 @@ class AppStoreRelease(
     private fun qualifiesForPromotion(
         receipt: Receipt?,
         preparation: Preparation?,
+        appleBuildIdForRollback: String?,
     ): Boolean {
         if (preparation == null) return false
         val request = preparation.request
-        return receipt?.preparation == preparation &&
+        return receipt?.matchesPreparation(preparation, appleBuildIdForRollback) == true &&
             request.origin == PackageOrigin.CI_VERIFIED &&
             request.bundleId == config.bundleId &&
             request.repository == env["GITHUB_REPOSITORY"] &&
@@ -540,8 +551,19 @@ class AppStoreRelease(
             buildId,
             ascVersionId = versionId,
             preparation =
-                preparation?.also {
-                    require(tags.read(testFlightTag(version.value, number))?.preparation == it) {
+                preparation?.also { expected ->
+                    val original = tags.read(testFlightTag(version.value, number))
+                    val appleBuildIdForRollback = buildId.takeIf {
+                        original?.preparation == null &&
+                            preparations().any { record ->
+                                record.preparation == expected && record.manifest != null
+                            }
+                    }
+                    require(
+                        original != null &&
+                            original.ascBuildId == buildId &&
+                            original.matchesPreparation(expected, appleBuildIdForRollback)
+                    ) {
                         "TestFlight receipt provenance differs from the expected preparation"
                     }
                 },

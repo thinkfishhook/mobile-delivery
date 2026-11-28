@@ -79,8 +79,9 @@ class SplitTool(
                 "Selected source must resolve to its exact commit"
             }
         val apple = Asc(config, commands, env)
+        val store = GitHubPreparationStore(github)
         val tags =
-            GitHubReceiptTags(github).apply {
+            GitHubReceiptTags(github, store::sealedPreparation).apply {
                 onCredentialSuccess = {
                     resolveCredentialIncidents(setOf("IOS_RECEIPT_TOKEN"), config, commands, env)
                 }
@@ -90,7 +91,6 @@ class SplitTool(
                 }
             }
         val artifacts = GitHubBuildArtifacts(github, env.getValue("GITHUB_RUN_ID"))
-        val store = GitHubPreparationStore(github)
         val packages = PreparedPackages(artifacts, config, commands, env)
         val service =
             SplitDelivery(

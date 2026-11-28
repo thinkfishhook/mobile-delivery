@@ -40,7 +40,70 @@ class SweepPreparationTest {
         }
 
     @Test
-    fun `audit rejects a two-component reserved receipt with no preparation provenance`() =
+    fun `sweep corroborates an old two-component receipt without rewriting it`() = temp { output ->
+        val world = World(output)
+        val preparation = twoComponentPreparation()
+        val rawReceipt =
+            Receipt(preparation.request.sha, preparation.version, preparation.number, "ci")
+        world.tags.write(tag(preparation), preparation.request.sha, rawReceipt)
+        world.tags.failWrites = true
+        world.apple.builds +=
+            TestFlightBuild(
+                "ci",
+                preparation.version.value,
+                preparation.number.value,
+                "VALID",
+                true,
+            )
+        val delivered = mutableListOf<String>()
+        val sweep =
+            world.sweepWithPreparation(
+                PreparationRecord(preparation, preparedManifest(preparation)),
+                onDelivered = { sha, _ -> delivered += sha },
+            )
+
+        val report = sweep.run(preparation.request.sha, audit = true)
+
+        assertFalse(report.broken)
+        assertEquals(listOf(preparation.request.sha), delivered)
+        assertEquals(rawReceipt, world.tags.read(tag(preparation)))
+    }
+
+    @Test
+    fun `audit rejects an old two-component receipt when Apple reports another build ID`() =
+        temp { output ->
+            val world = World(output)
+            val preparation = twoComponentPreparation()
+            world.tags.write(
+                tag(preparation),
+                preparation.request.sha,
+                Receipt(preparation.request.sha, preparation.version, preparation.number, "old-id"),
+            )
+            addTestableBuild(world, preparation)
+            val sweep =
+                world.sweepWithPreparation(
+                    PreparationRecord(preparation, preparedManifest(preparation))
+                )
+
+            val report = sweep.run(preparation.request.sha, audit = true)
+
+            assertTrue(
+                report.findings.any { finding ->
+                    finding.operationKey == IncidentSubject.Audit && finding.repairError != null
+                }
+            )
+            assertEquals(
+                "delivery unread",
+                report.findings
+                    .single {
+                        it.operationKey == IncidentSubject.BetaCommit(preparation.request.sha)
+                    }
+                    .outcome,
+            )
+        }
+
+    @Test
+    fun `audit rejects a two-component reserved receipt without preparation or Apple evidence`() =
         temp { output ->
             val world = World(output)
             val preparation = twoComponentPreparation()

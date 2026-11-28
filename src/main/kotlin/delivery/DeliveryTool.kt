@@ -66,8 +66,9 @@ class DeliveryTool(
                 }
             )
         val source = GitSource(root, config, commands, branch)
+        val ledger = GitHubPreparationStore(github)
         val tags =
-            GitHubReceiptTags(github).apply {
+            GitHubReceiptTags(github, ledger::sealedPreparation).apply {
                 onCredentialSuccess = {
                     resolveCredentialIncidents(setOf("IOS_RECEIPT_TOKEN"), config, commands, env)
                 }
@@ -79,7 +80,6 @@ class DeliveryTool(
                 }
             }
         val artifacts = GitHubBuildArtifacts(github, env["GITHUB_RUN_ID"] ?: "local")
-        val ledger = GitHubPreparationStore(github)
         val preparations = { ledger.read().records }
         val symbols =
             ReleaseSymbols(

@@ -76,7 +76,8 @@ Apps that use commit-count build numbers can set `"build_numbering": "commit_cou
 `.github/delivery.json`. CI reserves `<source commit count>.<attempt>` for the verified
 commit. The same ledger allocates manual builds from the three-component sequence and
 retains earlier package identities for reruns. Update all shared action pins to v1.2.0
-or newer before enabling this setting.
+or newer before enabling this setting. See the [rollback and receipt recovery
+procedure](docs/upgrade-v1.1.md#rollback) when switching allocation modes.
 
 For an interrupted or uncertain upload, rerun the original deployment to reconcile
 Apple's state and reuse the existing build. A fresh manual dispatch starts a new build

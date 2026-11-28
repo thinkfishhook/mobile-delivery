@@ -11,6 +11,8 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 - Apps can opt in to commit-count build numbers for verified CI packages. Preparation
   reservations preserve existing package and receipt identities and keep manual builds unique.
+- Recover matching count-based receipts written by older maintenance runs through the sealed
+  reservation and exact Apple build identity, preserving the original tag.
 
 ### Changed
 

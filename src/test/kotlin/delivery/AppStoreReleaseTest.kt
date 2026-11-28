@@ -269,6 +269,49 @@ class AppStoreReleaseTest {
     }
 
     @Test
+    fun `promotion carries sealed provenance past a matching rollback receipt`() {
+        val store = released()
+        val prepared = store.preparedBuild("405.1")
+        val tag = "deploy/testflight/26.09.02/405.1"
+        val rollback =
+            Receipt(prepared.request.sha, prepared.version, prepared.number, "build-405.1")
+        store.tags.tags[tag] = rollback.sha to rollback
+
+        val result = store.release().promote(scheduled)
+
+        assertEquals("405.1", result.build)
+        assertEquals(prepared, store.tags.read("submit/appstore/26.09.02/405.1")?.preparation)
+        assertEquals(rollback, store.tags.read(tag))
+    }
+
+    @Test
+    fun `a rollback receipt with a different Apple build ID cannot promote`() {
+        val store = released()
+        val prepared = store.preparedBuild("405.1")
+        val rollback =
+            Receipt(prepared.request.sha, prepared.version, prepared.number, "another-build")
+        store.tags.tags["deploy/testflight/26.09.02/405.1"] = rollback.sha to rollback
+
+        assertNull(selectBuild(store.release().facts()))
+    }
+
+    @Test
+    fun `App Store receipt repair carries sealed provenance past a matching rollback receipt`() {
+        val store = released()
+        val prepared = store.preparedBuild("405.1")
+        val rollback =
+            Receipt(prepared.request.sha, prepared.version, prepared.number, "build-405.1")
+        store.tags.tags["deploy/testflight/26.09.02/405.1"] = rollback.sha to rollback
+        store.version("26.09.02", "READY_FOR_SALE", "405.1")
+
+        store.release().sweep()
+
+        assertEquals(prepared, store.tags.read("submit/appstore/26.09.02/405.1")?.preparation)
+        assertEquals(prepared, store.tags.read("deploy/appstore/26.09.02/405.1")?.preparation)
+        assertTrue(store.apple.calls.isEmpty())
+    }
+
+    @Test
     fun `no newer build is a quiet healthy skip`() {
         val store = released()
         val result = store.release().promote(scheduled)
