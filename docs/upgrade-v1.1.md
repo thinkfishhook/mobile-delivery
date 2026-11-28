@@ -23,3 +23,17 @@ cannot safely read that state. Preserve preparation refs, receipts and retained 
 bytes. Pause new preparation with the delivery switch if needed and let accepted uploads
 finish recovery before changing the caller shape. Use the original deployment run for
 receipt or distribution recovery. Keep App Store enablement a separate decision.
+
+To roll back commit-count allocation, remove `"build_numbering": "commit_count"`
+from `.github/delivery.json`. New reservations return to the three-component
+sequence. Keep all shared actions pinned to the same compatible release, v1.2.0
+or newer, to read existing commit-count packages and receipts. Before enabling
+commit-count allocation, let running and queued jobs using earlier pins finish.
+Run subsequent maintenance and audits from the updated workflow.
+
+If older maintenance already wrote a receipt without preparation metadata, use
+a release with commit-count receipt recovery. It preserves the immutable tag when
+the earlier sweep's receipt matches a sealed, verified CI reservation and the
+Apple record. The checks cover the tag target and receipt commit, marketing
+version, build number, Apple build ID, and the App Store version ID for App Store
+receipts. Investigate any mismatch before retrying.

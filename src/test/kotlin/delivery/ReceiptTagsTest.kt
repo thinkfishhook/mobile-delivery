@@ -145,6 +145,54 @@ class ReceiptTagsTest {
     }
 
     @Test
+    fun `exact old sweep receipt recovers a sealed count-based receipt without modifying the tag`() {
+        val preparation =
+            Preparation(preparationRequest(), MarketingVersion("26.09.01"), BuildNumber("234.2"))
+        for (versionId in listOf(null, "store-version")) {
+            val original =
+                Receipt(
+                    preparation.request.sha,
+                    preparation.version,
+                    preparation.number,
+                    "apple-build",
+                    ascVersionId = versionId,
+                )
+            val expected = original.copy(preparation = preparation)
+            val prefix = if (versionId == null) "deploy/testflight" else "submit/appstore"
+            val tag = "$prefix/${expected.version}/${expected.number}"
+
+            fun calls(existing: Receipt, sealed: Preparation?, succeeds: Boolean) {
+                val commands = RecordingCommands()
+                commands.response("""{"object":{"type":"tag","sha":"tag-id"}}""")
+                commands.response(
+                    buildJsonObject {
+                        putJsonObject("object") { put("sha", existing.sha) }
+                        put("message", json.encodeToString(existing))
+                    }
+                        .toString()
+                )
+                val tags =
+                    GitHubReceiptTags(GitHub("owner/repo", commands, emptyMap())) {
+                        assertEquals(preparation.number, it)
+                        sealed
+                    }
+                val write = { tags.write(tag, expected.sha, expected) }
+                if (succeeds) write() else assertFails(block = write)
+                assertEquals(2, commands.calls.size)
+                assertTrue(commands.calls.all { it.input == null })
+            }
+
+            calls(original, preparation, succeeds = true)
+            calls(original, null, succeeds = false)
+            calls(original.copy(ascBuildId = "another-build"), preparation, succeeds = false)
+            calls(original.copy(ascVersionId = "another-version"), preparation, succeeds = false)
+            calls(original.copy(workflow = "another-producer"), preparation, succeeds = false)
+            val wrongPreparation = preparation.copy(request = preparationRequest(run = "124"))
+            calls(original.copy(preparation = wrongPreparation), preparation, succeeds = false)
+        }
+    }
+
+    @Test
     fun `legacy receipt is idempotent despite property order and whitespace`() {
         val build = sampleReceipt
         val commands = RecordingCommands()

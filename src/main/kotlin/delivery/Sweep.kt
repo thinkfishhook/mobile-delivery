@@ -59,7 +59,7 @@ class Sweep(
             }
         val repaired = mutableSetOf<String>()
         findings += repairReceipts(facts, repaired)
-        if (audit) findings += auditReceipts(facts.receipts)
+        if (audit) findings += auditReceipts(facts)
         val receipts = facts.receipts + repaired
         val (deliveryFinding, delivered) =
             try {
@@ -136,21 +136,20 @@ class Sweep(
                 )
         return matching.firstOrNull()?.preparation?.let { p ->
             val tag = "deploy/testflight/${p.version}/${p.number}"
-            require(tags.commit(tag) == tip && tags.read(tag)?.preparation == p) {
+            val build = facts.buildFor(p)
+            require(
+                tags.commit(tag) == tip && tags.read(tag)?.matchesPreparation(p, build?.id) == true
+            ) {
                 "Reserved receipt differs from its sealed source provenance"
             }
-            p to
-                Trace(
-                    p.number,
-                    p.version.value,
-                    tip,
-                    null,
-                    facts.builds.find {
-                        it.number == p.number.value && it.version == p.version.value
-                    },
-                )
+            p to Trace(p.number, p.version.value, tip, null, build)
         }
     }
+
+    private fun BetaFacts.buildFor(preparation: Preparation): TestFlightBuild? =
+        builds.singleOrNull {
+            it.number == preparation.number.value && it.version == preparation.version.value
+        }
 
     // Whether this sweep looked closely enough at an incident's subject to close it. Absence from
     // the findings means nothing for what the sweep did not read.
@@ -278,41 +277,46 @@ class Sweep(
     }
 
     // Reserved receipts bind the source through preparation; legacy ones encode its count.
-    private fun auditReceipts(receipts: Set<String>) = receipts.mapNotNull { tag ->
-        try {
-            val number = BuildNumber(tag.substringAfterLast('/'))
-            val sha = tags.commit(tag)
-            val reserved = preparationRecords[number]
-            val provenance = tags.read(tag)?.preparation
-            val count = number.legacyCount
-            when {
-                reserved != null ->
-                    require(
-                        reserved.manifest != null &&
-                            provenance == reserved.preparation &&
-                            reserved.preparation.request.sha == sha &&
-                            reserved.preparation.request.bundleId == config.bundleId
-                    ) {
-                        "$tag does not match its sealed preparation"
-                    }
-                provenance != null || count == null ->
-                    require(provenance?.request?.sha == sha) {
-                        "$tag has no matching reserved-source provenance"
-                    }
-                else ->
-                    require(source.count(sha) == count) {
-                        "$tag points at $sha, whose count is not $count"
-                    }
+    private fun auditReceipts(facts: BetaFacts) =
+        facts.receipts.mapNotNull { tag ->
+            try {
+                val number = BuildNumber(tag.substringAfterLast('/'))
+                val sha = tags.commit(tag)
+                val reserved = preparationRecords[number]
+                val receipt = tags.read(tag)
+                val provenance = receipt?.preparation
+                val count = number.legacyCount
+                when {
+                    reserved != null ->
+                        require(
+                            reserved.manifest != null &&
+                                reserved.preparation.request.sha == sha &&
+                                reserved.preparation.request.bundleId == config.bundleId &&
+                                receipt?.matchesPreparation(
+                                    reserved.preparation,
+                                    facts.buildFor(reserved.preparation)?.id,
+                                ) == true
+                        ) {
+                            "$tag does not match its sealed preparation"
+                        }
+                    provenance != null || count == null ->
+                        require(provenance?.request?.sha == sha) {
+                            "$tag has no matching reserved-source provenance"
+                        }
+                    else ->
+                        require(source.count(sha) == count) {
+                            "$tag points at $sha, whose count is not $count"
+                        }
+                }
+                null
+            } catch (error: Exception) {
+                SweepFinding(
+                    IncidentSubject.Audit,
+                    "receipt collision",
+                    repairError = "$tag: ${error.displayMessage()}",
+                )
             }
-            null
-        } catch (error: Exception) {
-            SweepFinding(
-                IncidentSubject.Audit,
-                "receipt collision",
-                repairError = "$tag: ${error.displayMessage()}",
-            )
         }
-    }
 
     fun summary(result: SweepReport, executionFailed: Boolean = false) =
         RunSummary(

@@ -34,7 +34,10 @@ fun requireReceiptNames(prefix: String, names: Set<String>): Set<String> = names
         )
 }
 
-class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
+class GitHubReceiptTags(
+    private val github: GitHub,
+    private val sealedPreparation: (BuildNumber) -> Preparation? = { null },
+) : ReceiptTags {
     internal var onCredentialSuccess: () -> Unit = {}
     internal var onCredentialProblem: (CredentialProblem) -> Unit = {}
 
@@ -106,11 +109,23 @@ class GitHubReceiptTags(private val github: GitHub) : ReceiptTags {
                 "Receipt collision: $tag"
             }
             if (receipt.preparation != null || receipt.number.legacyCount == null) {
-                require(
-                    runCatching {
-                        json.decodeFromString<Receipt>(existing.string("message")).preparation
+                val preparation =
+                    requireNotNull(receipt.preparation) {
+                        "Expected preparation provenance for $tag"
                     }
-                        .getOrNull() == receipt.preparation && receipt.preparation != null
+                val previous = runCatching {
+                    json.decodeFromString<Receipt>(existing.string("message"))
+                }
+                    .getOrNull()
+                val matches =
+                    previous?.matchesPreparation(
+                        preparation,
+                        receipt.ascBuildId,
+                        receipt.ascVersionId,
+                    ) == true
+                require(
+                    previous?.preparation == preparation ||
+                        (matches && sealedPreparation(receipt.number) == preparation)
                 ) {
                     "Receipt provenance collision: $tag"
                 }
@@ -189,4 +204,28 @@ data class Receipt(
                 "Receipt identity differs from its preparation"
             }
     }
+}
+
+// Older sweeps could recover a count-based build using only Apple facts. Keep their immutable
+// receipt when the caller corroborates its exact identity against an already sealed reservation.
+internal fun Receipt.matchesPreparation(
+    expected: Preparation,
+    appleBuildId: String? = null,
+    appleVersionId: String? = null,
+): Boolean {
+    if (preparation != null) return preparation == expected
+    return number.legacyCount != null &&
+        expected.request.origin == PackageOrigin.CI_VERIFIED &&
+        sha == expected.request.sha &&
+        version == expected.version &&
+        number == expected.number &&
+        appleBuildId != null &&
+        ascBuildId == appleBuildId &&
+        ascVersionId == appleVersionId &&
+        workflow == null &&
+        ipaSha256 == null &&
+        ipaBytes == null &&
+        distributedAt == null &&
+        xcode == null &&
+        asc == null
 }
