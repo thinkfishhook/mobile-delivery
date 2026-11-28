@@ -79,6 +79,8 @@ class DeliveryTool(
                 }
             }
         val artifacts = GitHubBuildArtifacts(github, env["GITHUB_RUN_ID"] ?: "local")
+        val ledger = GitHubPreparationStore(github)
+        val preparations = { ledger.read().records }
         val symbols =
             ReleaseSymbols(
                 artifacts,
@@ -95,6 +97,7 @@ class DeliveryTool(
                 env,
                 hints = hints,
                 holdIssues = GitHubHoldIssues(github),
+                preparations = preparations,
             )
         val redStreaks =
             RedStreaks(
@@ -114,6 +117,9 @@ class DeliveryTool(
                 env,
                 onReceipted = { receipt ->
                     redStreaks.closeDelivered(receipt.sha, "${receipt.version}/${receipt.number}")
+                },
+                reservedNumbers = {
+                    preparations().mapTo(mutableSetOf()) { it.preparation.number }
                 },
             )
         requireActionsWriter(env, branch)
@@ -169,7 +175,7 @@ class DeliveryTool(
                 GitHubIncidents(github, config.incidentMarker, branch),
                 github::queuedPush,
                 hints,
-                preparations = { GitHubPreparationStore(github).read().records },
+                preparations = preparations,
                 redStreak = { sha ->
                     val summaryFile = root.resolve("build/delivery/run-summary.json")
                     val current =

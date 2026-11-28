@@ -61,6 +61,7 @@ class AppStoreReleaseTest {
         val holds = mutableListOf<HoldIssue>()
         val artifacts = FakeArtifacts()
         val releases = FakeReleases()
+        val reservations = mutableListOf<PreparationRecord>()
         private val workspace = createTempDirectory("release-symbols-").also(workspaces::add)
 
         fun symbols() = ReleaseSymbols(artifacts.forRun("release"), releases, workspace)
@@ -87,6 +88,40 @@ class AppStoreReleaseTest {
                             )
             }
 
+        fun preparedBuild(
+            number: String,
+            request: PreparationRequest = preparationRequest(),
+        ): Preparation {
+            val build = TestFlightBuild("build-$number", "26.09.02", number, "VALID", false)
+            apple.builds += build
+            val preparation =
+                Preparation(request, MarketingVersion(build.version), BuildNumber(number))
+            val manifest = preparedManifest(preparation, "ipa".toByteArray())
+            reservations += PreparationRecord(preparation, manifest)
+            source.shas += request.sha
+            tags.write(
+                "deploy/testflight/${preparation.version}/$number",
+                request.sha,
+                Receipt(
+                    request.sha,
+                    preparation.version,
+                    preparation.number,
+                    build.id,
+                    preparation = preparation,
+                ),
+            )
+            artifacts.retained[manifest.artifactName] =
+                "123" to
+                    mapOf(
+                        "App.ipa" to "ipa".toByteArray(),
+                        "manifest.json" to
+                            json
+                                .encodeToString(ArtifactManifest.serializer(), manifest)
+                                .toByteArray(),
+                    )
+            return preparation
+        }
+
         fun version(version: String, state: String, number: String?, rollout: Rollout? = null) =
             StoreVersion(
                     "id-$version",
@@ -112,7 +147,19 @@ class AppStoreReleaseTest {
         env: Map<String, String> = enabled,
         at: Clock = wednesday,
         holdIssues: HoldIssues = HoldIssues { holds.toList() },
-    ) = AppStoreRelease(config, apple, tags, source, symbols(), env, at, holdIssues = holdIssues)
+        preparations: () -> List<PreparationRecord> = { reservations.toList() },
+    ) =
+        AppStoreRelease(
+            config,
+            apple,
+            tags,
+            source,
+            symbols(),
+            env,
+            at,
+            preparations = preparations,
+            holdIssues = holdIssues,
+        )
 
     @Test
     fun `foreign version history is excluded from comparisons and reported in preflight`() {
@@ -147,6 +194,78 @@ class AppStoreReleaseTest {
         assertEquals("build-405.1", store.submitted().single().buildId)
         assertTrue("submit/appstore/26.09.02/405.1" in store.tags.tags)
         assertEquals("sha-405.1", store.tags.tags.getValue("submit/appstore/26.09.02/405.1").first)
+    }
+
+    @Test
+    fun `commit-count preparations retain verified provenance in App Store receipts`() {
+        val store = released()
+        store.preparedBuild("405.1.1")
+        val verified =
+            store.preparedBuild("405.2", preparationRequest(sha = "b".repeat(40), run = "124"))
+        store.preparedBuild(
+            "406.1",
+            preparationRequest(sha = "c".repeat(40), run = "125", origin = PackageOrigin.MANUAL),
+        )
+
+        val result = store.release().promote(scheduled)
+
+        assertEquals("405.2", result.build)
+        assertEquals(verified, store.tags.read("submit/appstore/26.09.02/405.2")?.preparation)
+    }
+
+    @Test
+    fun `mixed build numbers compare by all version components`() {
+        val store = released()
+        store.preparedBuild("405.1.1")
+        store.build("405.2")
+
+        assertEquals("405.2", selectBuild(store.release().facts())?.build?.number)
+    }
+
+    @Test
+    fun `a legacy retry of the released commit is not a new release candidate`() {
+        val store = released()
+        store.build("400.2")
+
+        assertNull(selectBuild(store.release().facts()))
+    }
+
+    @Test
+    fun `a legacy build at the commit count of a published bare build is not newer`() {
+        val store = Store()
+        store.version("26.09.01", "READY_FOR_SALE", "400")
+        store.build("400.1")
+
+        assertNull(selectBuild(store.release().facts()))
+    }
+
+    @Test
+    fun `known count-based reservation needs matching TestFlight provenance to promote`() {
+        val store = released()
+        store.build("405.1")
+        store.build("406.1")
+        val reserved =
+            Preparation(preparationRequest(), MarketingVersion("26.09.02"), BuildNumber("406.1"))
+        val sealed = PreparationRecord(reserved, preparedManifest(reserved))
+        var record = sealed
+        val release = store.release(preparations = { listOf(record) })
+
+        assertEquals("405.1", selectBuild(release.facts())?.build?.number)
+
+        store.tags.tags["deploy/testflight/26.09.02/406.1"] =
+            reserved.request.sha to
+                Receipt(
+                    reserved.request.sha,
+                    reserved.version,
+                    reserved.number,
+                    "build-406.1",
+                    preparation = reserved,
+                )
+        record = PreparationRecord(reserved)
+        assertEquals("405.1", selectBuild(release.facts())?.build?.number)
+
+        record = sealed
+        assertEquals("406.1", selectBuild(release.facts())?.build?.number)
     }
 
     @Test
@@ -864,7 +983,7 @@ class AppStoreReleaseTest {
             store.source.shas += "sha-fix"
             store.build("405.1")
             store.holds += held
-            store.tags.failReads = true
+            store.tags.unreadable += "deploy/testflight/26.09.02/402.1"
             // Not "cannot be resolved" (open) and not lifted (closed with a fix): red.
             val failure = assertFails { store.release().promote(scheduled) }
             assertContains(failure.message!!, "HTTP 502")

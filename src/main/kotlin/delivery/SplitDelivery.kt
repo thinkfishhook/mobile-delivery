@@ -68,7 +68,12 @@ class SplitDelivery(
                     .map { it.version }
                     .toSet(),
             )
-        val preparation = reservations.reserve(request, version)
+        val useCommitCount =
+            request.origin == PackageOrigin.CI_VERIFIED &&
+                config.buildNumbering == BuildNumbering.COMMIT_COUNT
+        val commitCount: (() -> Int)? =
+            if (useCommitCount) ({ source.count(request.sha) }) else null
+        val preparation = reservations.reserve(request, version, commitCount)
         val directory =
             root.resolve("build/retained-package").resolve(preparation.id).createDirectories()
         val existing = store.read().records.single { it.preparation.id == preparation.id }

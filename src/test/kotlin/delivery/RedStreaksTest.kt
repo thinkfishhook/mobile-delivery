@@ -267,7 +267,7 @@ class RedStreaksTest {
         h.red(DeliveryToolHarness.sha('a'), "First red", "Old.fails")
         h.tip = DeliveryToolHarness.sha('b')
         h.counts[h.tip] = 501
-        h.tags["deploy/testflight/26.09.01/501.1"] = h.tip to "receipt"
+        h.receipt("26.09.01", "501.1", h.tip)
         h.run("sweep", "schedule").getOrThrow()
         val closed = h.streak()
         assertEquals("closed", closed.string("state"))
@@ -282,7 +282,7 @@ class RedStreaksTest {
         val firstNumber = h.streak().string("number")
         h.tip = DeliveryToolHarness.sha('b')
         h.counts[h.tip] = 501
-        h.tags["deploy/testflight/26.09.01/501.1"] = h.tip to "receipt"
+        h.receipt("26.09.01", "501.1", h.tip)
         h.run("sweep", "schedule").getOrThrow()
         h.red(DeliveryToolHarness.sha('c'), "New red", "New.fails", "12")
         val streaks = h.issues.filter { ":red-streak -->" in it.string("body") }

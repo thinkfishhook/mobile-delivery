@@ -49,6 +49,22 @@ class DeliveryConfigTest {
     }
 
     @Test
+    fun `CI build numbering is an explicit opt in`() {
+        assertEquals(
+            BuildNumbering.RESERVATION_SEQUENCE,
+            DeliveryConfig.parse(example("xcode")).buildNumbering,
+        )
+        assertEquals(
+            BuildNumbering.COMMIT_COUNT,
+            DeliveryConfig.parse(changed { put("build_numbering", "commit_count") }).buildNumbering,
+        )
+        val failure = assertFails {
+            DeliveryConfig.parse(changed { put("build_numbering", "commit-count") })
+        }
+        assertContains(failure.message.orEmpty(), "build_numbering")
+    }
+
+    @Test
     fun `stale branch setting explains the single source`() {
         val failure = assertFails { DeliveryConfig.parse(changed { put("branch", "main") }) }
         assertContains(

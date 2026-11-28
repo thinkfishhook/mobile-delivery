@@ -58,6 +58,39 @@ class SplitDeliveryTest {
     }
 
     @Test
+    fun `configured CI counts the verified commit and manual builds share the same reservation ledger`() =
+        temp { root ->
+            val world = World(root)
+            val store = MemoryReservations()
+            val service =
+                SplitDelivery(
+                    config.copy(buildNumbering = BuildNumbering.COMMIT_COUNT),
+                    world.apple,
+                    world.source,
+                    world.builds,
+                    PreparationReservations(store) { emptySet() },
+                    store,
+                    { _, _ -> error("no recovery expected") },
+                    clock,
+                )
+            val request = preparationRequest()
+            world.source.shas = listOf("f".repeat(40), request.sha, "b".repeat(40))
+            service.verify(request, root)
+            val verified = service.prepare(request, root).record
+            val manual =
+                service
+                    .prepare(
+                        preparationRequest(run = "124", origin = PackageOrigin.MANUAL),
+                        root,
+                    )
+                    .record
+
+            val count = world.source.count(request.sha)
+            assertEquals(BuildNumber("$count.1"), verified.manifest!!.number)
+            assertEquals(BuildNumber("$count.1.1"), manual.manifest!!.number)
+        }
+
+    @Test
     fun `manual branch builds without tests while failed or mismatched CI proof cannot prepare`() =
         temp { root ->
             val world = World(root)

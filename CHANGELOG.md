@@ -5,6 +5,13 @@ format. Releases use [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-28
+
+### Added
+
+- Apps can opt in to commit-count build numbers for verified CI packages. Preparation
+  reservations preserve existing package and receipt identities and keep manual builds unique.
+
 ### Changed
 
 - Default callers use ordinary PR verification and native rebase auto-merge, with inline

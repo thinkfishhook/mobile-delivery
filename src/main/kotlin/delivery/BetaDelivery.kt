@@ -59,6 +59,7 @@ class BetaDelivery(
     private val env: Map<String, String>,
     private val clock: Clock = Clock.systemUTC(),
     private val onReceipted: (Receipt) -> Unit = {},
+    private val reservedNumbers: () -> Set<BuildNumber> = { emptySet() },
 ) {
     private fun now() = config.now(clock)
 
@@ -77,33 +78,46 @@ class BetaDelivery(
             ),
         )
 
-    fun traces(sha: String, facts: BetaFacts = facts()): CommitTraces {
+    fun traces(
+        sha: String,
+        facts: BetaFacts = facts(),
+        reservedNumbers: Set<BuildNumber> = this.reservedNumbers(),
+    ): CommitTraces {
         val count = source.count(sha)
-        // Only pipeline builds count: YY.MM.RR versions and <count>.<attempt> numbers.
-        fun ours(number: String, version: String) = runCatching {
+        fun matchingNumber(number: String, version: String) = runCatching {
             MarketingVersion(version) to BuildNumber(number)
         }
             .getOrNull()
             ?.second
             ?.takeIf { it.legacyCount == count }
-        val receipts =
+        val matchingReceipts =
             facts.receipts.mapNotNull { tag ->
                 val (version, number) = tag.removePrefix("deploy/testflight/").split('/')
-                ours(number, version)?.let { Triple(it, version, tag) }
+                matchingNumber(number, version)?.let { Triple(it, version, tag) }
             }
+        val splitNumbers =
+            reservedNumbers +
+                matchingReceipts.mapNotNull { (number, _, tag) ->
+                    number.takeIf { it !in reservedNumbers && tags.read(tag)?.preparation != null }
+                }
+        val reservedAttempts =
+            splitNumbers.filter { it.legacyCount == count }.mapTo(mutableSetOf()) { it.attempt }
+        val receipts = matchingReceipts.filterNot { it.first in splitNumbers }
+        fun legacyNumber(number: String, version: String) =
+            matchingNumber(number, version)?.takeUnless { it in splitNumbers }
         val numbers =
             (receipts.map { it.first to it.second } +
                     facts.builds.mapNotNull { b ->
-                        ours(b.number, b.version)?.let { it to b.version }
+                        legacyNumber(b.number, b.version)?.let { it to b.version }
                     } +
                     facts.uploads.mapNotNull { u ->
-                        ours(u.number, u.version)?.let { it to u.version }
+                        legacyNumber(u.number, u.version)?.let { it to u.version }
                     })
                 .distinctBy { it.first }
         // Builds retained after the last number Apple or a receipt shows, found by exact name
         // whatever version they were built for.
         val retained =
-            generateSequence((numbers.maxOfOrNull { it.first.attempt } ?: 0) + 1) { it + 1 }
+            availableBuildAttempts(numbers.maxOfOrNull { it.first.attempt } ?: 0, reservedAttempts)
                 .map { artifacts.retained(Policy.buildNumber(count, it)) }
                 .takeWhile { it != null }
                 .filterNotNull()
@@ -123,6 +137,7 @@ class BetaDelivery(
                     facts.builds.find { it.number == number.value && it.version == version },
                 )
             } + retained,
+            reservedAttempts,
         )
     }
 
@@ -237,13 +252,11 @@ class BetaDelivery(
                     else ->
                         error("$sha changed during verification ($decision); nothing was archived")
                 }
-                val number =
-                    Policy.buildNumber(traces.count, (traces.latest?.number?.attempt ?: 0) + 1)
                 val build =
                     Build(
                         sha,
                         traces.version,
-                        number,
+                        traces.nextNumber(),
                         workflowUrl(env),
                         config.xcode,
                         config.asc,

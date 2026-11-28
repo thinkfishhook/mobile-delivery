@@ -60,8 +60,22 @@ class CommitTraces(
     val count: Int,
     val version: MarketingVersion,
     val traces: List<Trace>,
+    private val reservedAttempts: Set<Int> = emptySet(),
 ) {
     val delivered = traces.firstOrNull { it.receiptTarget == sha }
     val latest = traces.maxByOrNull { it.number.attempt }
     val expectedAttempt = latest?.number?.value ?: "none"
+
+    fun nextNumber(): BuildNumber {
+        val attempt =
+            requireNotNull(
+                availableBuildAttempts(latest?.number?.attempt ?: 0, reservedAttempts).firstOrNull()
+            ) {
+                "No legacy build number remains for commit count $count"
+            }
+        return Policy.buildNumber(count, attempt)
+    }
 }
+
+internal fun availableBuildAttempts(after: Int, reservedAttempts: Set<Int>) =
+    ((after + 1)..99).asSequence().filterNot { it in reservedAttempts }

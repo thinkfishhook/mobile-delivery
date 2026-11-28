@@ -35,36 +35,50 @@ class AppStoreRelease(
     private val env: Map<String, String>,
     private val clock: Clock = Clock.systemUTC(),
     private val hints: WorkflowHints = WorkflowHints(env),
+    private val preparations: () -> List<PreparationRecord> = { emptyList() },
     private val holdIssues: HoldIssues = HoldIssues { emptyList() },
 ) {
     fun facts(): StoreFacts {
         val receipts = tags.names("deploy/testflight/")
+        val versions = apple.storeVersions()
+        val builds = apple.testFlightBuilds()
+        val buildTags = builds.map { testFlightTag(it.version, it.number) }
+        val versionTags = versions.mapNotNull { version ->
+            version.buildNumber?.let { testFlightTag(version.version, it) }
+        }
+        val reserved = preparations().associateBy { it.preparation.number.value }
+        // Historical count.attempt receipts need no annotation read during a normal sweep.
+        val relevant =
+            (buildTags + versionTags)
+                .intersect(receipts)
+                .filter { tag ->
+                    val number = tag.substringAfterLast('/')
+                    number in reserved ||
+                        runCatching { BuildNumber(number).legacyCount }.getOrNull() == null
+                }
+                .associateWith(tags::read)
+        val expected =
+            relevant
+                .mapNotNull { (tag, receipt) ->
+                    val number = tag.substringAfterLast('/')
+                    (reserved[number]?.preparation ?: receipt?.preparation)?.let { tag to it }
+                }
+                .toMap()
         val current =
             StoreFacts(
-                apple.storeVersions(),
-                apple.testFlightBuilds(),
+                versions,
+                builds,
                 receipts,
                 submissions = apple.reviewSubmissions(),
                 unqualifiedReceipts =
-                    receipts
-                        .filter { tag ->
-                            val number = runCatching {
-                                BuildNumber(tag.substringAfterLast('/'))
-                            }
-                                .getOrNull()
-                            if (number?.legacyCount != null) false
-                            else {
-                                val request = tags.read(tag)?.preparation?.request
-                                request == null ||
-                                    request.origin != PackageOrigin.CI_VERIFIED ||
-                                    request.bundleId != config.bundleId ||
-                                    request.repository != env["GITHUB_REPOSITORY"] ||
-                                    workflowInputs(env)?.branch?.let {
-                                        request.ref != "refs/heads/$it"
-                                    } == true
-                            }
+                    relevant
+                        .filter { (tag, receipt) ->
+                            val record = reserved[tag.substringAfterLast('/')]
+                            (record != null && record.manifest == null) ||
+                                !qualifiesForPromotion(receipt, expected[tag])
                         }
-                        .toSet(),
+                        .keys,
+                preparations = expected,
             )
         val targets by lazy {
             val selection = Selection(current, eligibilityRules(current))
@@ -93,7 +107,21 @@ class AppStoreRelease(
             holds,
             current.submissions,
             current.unqualifiedReceipts,
+            current.preparations,
         )
+    }
+
+    private fun qualifiesForPromotion(
+        receipt: Receipt?,
+        preparation: Preparation?,
+    ): Boolean {
+        if (preparation == null) return false
+        val request = preparation.request
+        return receipt?.preparation == preparation &&
+            request.origin == PackageOrigin.CI_VERIFIED &&
+            request.bundleId == config.bundleId &&
+            request.repository == env["GITHUB_REPOSITORY"] &&
+            workflowInputs(env)?.branch?.let { request.ref == "refs/heads/$it" } != false
     }
 
     // A hold naming no receipted build resolves to no commit. A failed read is an error, never
@@ -287,7 +315,9 @@ class AppStoreRelease(
         }
         val tag = "submit/appstore/$version/${build.number}"
         val repair = attemptEffect {
-            tags.write(tag, sha, storeReceipt(sha, version, build.number, build.id, versionId))
+            val receipt =
+                storeReceipt(sha, version, build.number, build.id, versionId, candidate.preparation)
+            tags.write(tag, sha, receipt)
         }
             .exceptionOrNull()
         if (!request.scheduled)
@@ -307,7 +337,7 @@ class AppStoreRelease(
     private fun notesBase(facts: StoreFacts): String =
         facts.versions
             .filter { it.state in StoreStates.released && it.buildNumber != null }
-            .sortedByDescending { StoreFacts.buildCount(it.buildNumber!!) }
+            .sortedByDescending { StoreFacts.buildOrder(it.buildNumber!!) }
             .map { "deploy/testflight/${it.version}/${it.buildNumber}" }
             .firstOrNull { it in facts.receipts }
             ?.let(tags::commit) ?: config.baseline
@@ -376,7 +406,7 @@ class AppStoreRelease(
             .filter { it.state !in StoreStates.editable && it.buildNumber != null }
             .forEach { version ->
                 val key = IncidentSubject.AppStoreVersion(version.version)
-                val testflight = "deploy/testflight/${version.version}/${version.buildNumber}"
+                val testflight = testFlightTag(version.version, version.buildNumber!!)
                 val wanted =
                     listOfNotNull(
                         "submit/appstore/${version.version}/${version.buildNumber}"
@@ -395,11 +425,12 @@ class AppStoreRelease(
                             storeReceipt(
                                 sha,
                                 MarketingVersion(version.version),
-                                version.buildNumber!!,
+                                version.buildNumber,
                                 requireNotNull(version.buildId) {
                                     "Cannot repair App Store receipt for ${version.version}: Apple did not report an attached build ID"
                                 },
                                 version.id,
+                                facts.preparations[testflight],
                             )
                         wanted.forEach { tags.write(it, sha, receipt) }
                     } catch (error: Exception) {
@@ -500,6 +531,7 @@ class AppStoreRelease(
         number: String,
         buildId: String,
         versionId: String,
+        preparation: Preparation?,
     ) =
         Receipt(
             sha,
@@ -508,8 +540,10 @@ class AppStoreRelease(
             buildId,
             ascVersionId = versionId,
             preparation =
-                if (BuildNumber(number).legacyCount == null)
-                    tags.read("deploy/testflight/$version/$number")?.preparation
-                else null,
+                preparation?.also {
+                    require(tags.read(testFlightTag(version.value, number))?.preparation == it) {
+                        "TestFlight receipt provenance differs from the expected preparation"
+                    }
+                },
         )
 }
