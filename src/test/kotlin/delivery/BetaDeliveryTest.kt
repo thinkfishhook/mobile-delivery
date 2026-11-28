@@ -59,6 +59,58 @@ class BetaDeliveryTest {
         }
 
     @Test
+    fun `legacy tracing skips a split receipt and leaves both numbers usable`() = temp { output ->
+        val world = World(output)
+        val request = preparationRequest(origin = PackageOrigin.CI_VERIFIED)
+        val preparation = Preparation(request, MarketingVersion("26.09.01"), BuildNumber("234.2"))
+        world.source.shas = listOf(request.sha)
+        world.deliver(request.sha)
+        world.apple.builds += TestFlightBuild("split", "26.09.01", "234.2", "VALID", false)
+        world.tags.write(
+            "deploy/testflight/26.09.01/234.2",
+            request.sha,
+            Receipt(
+                request.sha,
+                preparation.version,
+                preparation.number,
+                "split",
+                preparation = preparation,
+            ),
+        )
+
+        assertEquals(
+            listOf("234.1"),
+            world.beta().traces(request.sha).traces.map { it.number.value },
+        )
+        world.job(
+            Operation.Retry(request.sha, "234.1", "Rebuild legacy package", newAttempt = true)
+        )
+        assertEquals(listOf("234.1", "234.3"), world.apple.uploadedNumbers)
+    }
+
+    @Test
+    fun `legacy tracing skips a split reservation before its receipt exists`() = temp { output ->
+        val world = World(output)
+        world.apple.builds += TestFlightBuild("split", "26.09.01", "234.1", "VALID", false)
+        val beta =
+            BetaDelivery(
+                config,
+                world.apple,
+                world.tags,
+                world.artifacts.forRun("legacy"),
+                world.source,
+                world.builds,
+                world.env("legacy"),
+                clock,
+                reservedNumbers = { setOf(BuildNumber("234.1")) },
+            )
+        val operation = Operation.Deliver(sha)
+
+        assertEquals(StartDecision.Deliver(Plan.New), beta.start(operation))
+        assertEquals(BuildNumber("234.2"), beta.build(operation, output)?.number)
+    }
+
+    @Test
     fun `a delivered receipt does not bypass retry evidence validation`() = temp { output ->
         val world = World(output)
         world.deliver(sha)

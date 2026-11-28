@@ -63,6 +63,12 @@ data class ReleaseNotes(
 )
 
 @Serializable
+enum class BuildNumbering {
+    @SerialName("reservation_sequence") RESERVATION_SEQUENCE,
+    @SerialName("commit_count") COMMIT_COUNT,
+}
+
+@Serializable
 data class DeliveryConfig(
     @SerialName("app_id") val appId: String,
     @SerialName("bundle_id") val bundleId: String,
@@ -82,6 +88,8 @@ data class DeliveryConfig(
     @SerialName("build_environment") val buildEnvironment: List<String> = emptyList(),
     // Optional public literals specific to this app's executable, never tool-owned SDK keys.
     @SerialName("binary_checks") val binaryChecks: BinaryChecks = BinaryChecks(),
+    @SerialName("build_numbering")
+    val buildNumbering: BuildNumbering = BuildNumbering.RESERVATION_SEQUENCE,
     @Transient val toolchain: Toolchain = Toolchain.bundled,
 ) {
     init {

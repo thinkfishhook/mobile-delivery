@@ -17,7 +17,7 @@ interface ReceiptTags {
 
 class InvalidReceiptName(message: String) : IllegalArgumentException(message)
 
-// The tool writes legacy count.attempt or reserved three-component build numbers. Anything else
+// The tool writes count.attempt or reserved three-component build numbers. Anything else
 // prefix was made by hand and would be misread, so the run stops until a person deletes it.
 fun requireReceiptNames(prefix: String, names: Set<String>): Set<String> = names.onEach { tag ->
     val parts = tag.removePrefix(prefix).split('/')

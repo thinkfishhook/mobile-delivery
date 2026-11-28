@@ -117,6 +117,11 @@ private fun validateShape(
                     )
                 }
         }
+        SerialKind.ENUM -> {
+            val options = (0 until schema.elementsCount).map(schema::getElementName)
+            if (value !is JsonPrimitive || !value.isString || value.content !in options)
+                problems += "$path must be one of ${options.joinToString(", ")}"
+        }
         PrimitiveKind.STRING -> {
             if (value !is JsonPrimitive || !value.isString) problems += "$path must be a string"
             else if (value.content.isBlank() && path !in allowedBlank)

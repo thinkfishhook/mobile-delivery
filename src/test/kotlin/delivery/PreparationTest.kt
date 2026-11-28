@@ -62,6 +62,45 @@ class PreparationTest {
     }
 
     @Test
+    fun `commit count reservations advance past existing numbers and only allocate on new requests`() {
+        val store = MemoryReservations()
+        val reservations = PreparationReservations(store) { setOf("1678.1.3", "1658.1.4") }
+        val request = preparationRequest()
+        val first = reservations.reserve(request, version) { 1678 }
+        assertEquals(BuildNumber("1678.2"), first.number)
+        assertEquals(
+            first,
+            reservations.reserve(
+                request.copy(producer = request.producer.copy(attempt = 2)),
+                version,
+            ) {
+                error("A rerun must keep its original reservation")
+            },
+        )
+
+        val manual =
+            reservations.reserve(
+                preparationRequest(run = "124", origin = PackageOrigin.MANUAL),
+                version,
+            )
+        assertEquals(BuildNumber("1678.2.1"), manual.number)
+        val next = reservations.reserve(preparationRequest(run = "125"), version) { 1678 }
+        assertEquals(BuildNumber("1678.3"), next.number)
+        assertEquals(first, json.decodeFromString<Preparation>(json.encodeToString(first)))
+    }
+
+    @Test
+    fun `commit count cannot move behind an occupied identity or beyond the attempt range`() {
+        assertEquals(
+            BuildNumber("1678.1"),
+            nextCommitCountBuildNumber(1678, setOf("1658.1.4", "1677.99.99")),
+        )
+        assertEquals(BuildNumber("1678.2"), nextCommitCountBuildNumber(1678, setOf("01678.01.0")))
+        assertFails { nextCommitCountBuildNumber(1678, setOf("1679.0.1")) }
+        assertFails { nextCommitCountBuildNumber(1678, setOf("1678.99.3")) }
+    }
+
+    @Test
     fun `concurrent reservations and concurrent reruns have one durable result each`() {
         val store = MemoryReservations()
         val pool = Executors.newFixedThreadPool(6)

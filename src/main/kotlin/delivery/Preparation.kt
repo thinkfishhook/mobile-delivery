@@ -70,12 +70,6 @@ data class Preparation(
     val version: MarketingVersion,
     val number: BuildNumber,
 ) {
-    init {
-        require(number.legacyCount == null) {
-            "Preparation requires a reserved three-component build number"
-        }
-    }
-
     val id: String
         get() = request.id
 
@@ -136,12 +130,29 @@ fun nextPreparationNumber(occupied: Set<String>): BuildNumber {
     return BuildNumber("${next / 10000}.${next / 100 % 100}.${next % 100}")
 }
 
+internal fun nextCommitCountBuildNumber(count: Int, occupied: Set<String>): BuildNumber {
+    val first = Policy.buildNumber(count, 1)
+    val highest = occupied.maxOfOrNull(::appleBuildOrder) ?: return first
+    if (highest < appleBuildOrder(first.value)) return first
+
+    require(highest / 10000 == count.toLong()) {
+        "Source commit count $count is below the existing build-number floor"
+    }
+    val attempt = (highest % 10000 / 100).toInt() + 1
+    return Policy.buildNumber(count, attempt)
+}
+
 class PreparationReservations(
     private val store: PreparationStore,
     private val occupied: () -> Set<String>,
 ) {
-    fun reserve(request: PreparationRequest, version: MarketingVersion): Preparation =
-        change { snapshot ->
+    fun reserve(
+        request: PreparationRequest,
+        version: MarketingVersion,
+        commitCount: (() -> Int)? = null,
+    ): Preparation {
+        val count by lazy { commitCount?.invoke() }
+        return change { snapshot ->
             val existing = snapshot.records.find { it.preparation.id == request.id }
             if (existing != null) {
                 require(request.resumes(existing.preparation.request)) {
@@ -150,10 +161,14 @@ class PreparationReservations(
                 existing
             } else {
                 val taken = occupied() + snapshot.records.map { it.preparation.number.value }
-                PreparationRecord(Preparation(request, version, nextPreparationNumber(taken)))
+                val number =
+                    count?.let { nextCommitCountBuildNumber(it, taken) }
+                        ?: nextPreparationNumber(taken)
+                PreparationRecord(Preparation(request, version, number))
             }
         }
-        .preparation
+            .preparation
+    }
 
     // Seal before artifact publication. A competing builder cannot publish different bytes under
     // the same number. A sealed package that expired or was never retained must not be rebuilt.

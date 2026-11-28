@@ -1,5 +1,7 @@
 package delivery
 
+internal fun testFlightTag(version: String, number: String) = "deploy/testflight/$version/$number"
+
 object StoreStates {
     // Apple has shipped these versions; only a newer build can follow them.
     val released =
@@ -37,7 +39,7 @@ object StoreStates {
         require(shipped.all { it.buildNumber != null }) {
             "Apple did not report the build of a released version; cannot compare builds"
         }
-        return shipped.maxByOrNull { StoreFacts.buildCount(it.buildNumber!!) }
+        return shipped.maxByOrNull { StoreFacts.buildOrder(it.buildNumber!!) }
     }
 }
 
@@ -50,6 +52,7 @@ class StoreFacts(
     val holds: List<Hold> = emptyList(),
     val submissions: List<ReviewSubmission> = emptyList(),
     val unqualifiedReceipts: Set<String> = emptySet(),
+    val preparations: Map<String, Preparation> = emptyMap(),
 ) {
     val ignoredVersions =
         versions.filterNot { MarketingVersion.accepts(it.version) }.map { it.version }.distinct()
@@ -78,22 +81,47 @@ class StoreFacts(
         builds
             .filter { MarketingVersion.accepts(it.version) }
             .map {
+                val tag = testFlightTag(it.version, it.number)
                 Candidate(
                     it,
-                    "deploy/testflight/${it.version}/${it.number}"
-                        .takeIf { tag -> tag in receipts && tag !in unqualifiedReceipts },
+                    tag.takeIf { it in receipts && it !in unqualifiedReceipts },
+                    preparations[tag],
                 )
             }
 
+    fun newerThanLastRelease(candidate: Candidate): Boolean {
+        val release = lastRelease ?: return true
+        val number =
+            requireNotNull(release.buildNumber) {
+                "Apple did not report the build of released version ${release.version}"
+            }
+        val lastPreparation = preparations[testFlightTag(release.version, number)]
+        val candidateCount = legacyCommitCount(candidate.build.number, candidate.preparation)
+        val releasedCount = legacyCommitCount(number, lastPreparation)
+        // An upload retry of the same legacy commit is not another public release.
+        if (candidateCount != null && releasedCount != null) return candidateCount > releasedCount
+        return buildOrder(candidate.build.number) > buildOrder(number)
+    }
+
     companion object {
-        fun buildCount(number: String): Long =
-            if (number.count { it == '.' } == 2)
-                runCatching { appleBuildOrder(number) }.getOrDefault(0)
-            else (number.substringBefore('.').toLongOrNull() ?: 0) * 10000
+        fun buildOrder(number: String): Long = runCatching {
+            appleBuildOrder(number)
+        }
+            .getOrDefault(0)
+
+        private fun legacyCommitCount(number: String, preparation: Preparation?): Int? =
+            number
+                .takeIf { preparation == null && it.count { char -> char == '.' } < 2 }
+                ?.substringBefore('.')
+                ?.toIntOrNull()
     }
 }
 
-data class Candidate(val build: TestFlightBuild, val receipt: String?)
+data class Candidate(
+    val build: TestFlightBuild,
+    val receipt: String?,
+    val preparation: Preparation? = null,
+)
 
 class EligibilityRule(val name: String, val allows: (Candidate) -> Boolean)
 
@@ -102,15 +130,12 @@ fun eligibilityRules(
     facts: StoreFacts,
     held: (Candidate) -> Boolean = { false },
 ): List<EligibilityRule> {
-    val last = facts.lastRelease?.buildNumber?.let(StoreFacts::buildCount)
     return listOf(
         EligibilityRule("has a TestFlight receipt") { it.receipt != null },
         EligibilityRule("is not expired or invalid in Apple") {
             it.build.processingState == "VALID" && !it.build.expired
         },
-        EligibilityRule("is newer than the last App Store release") {
-            last == null || StoreFacts.buildCount(it.build.number) > last
-        },
+        EligibilityRule("is newer than the last App Store release", facts::newerThanLastRelease),
         EligibilityRule("has a marketing version not yet on the App Store") {
             it.build.version !in facts.usedVersions
         },
@@ -122,12 +147,7 @@ fun eligibilityRules(
 // an expensive rule runs only for builds that could still be selected.
 class Selection(facts: StoreFacts, private val rules: List<EligibilityRule>) {
     val candidates =
-        facts
-            .candidates()
-            .sortedWith(
-                compareByDescending<Candidate> { StoreFacts.buildCount(it.build.number) }
-                    .thenByDescending { it.build.attempt }
-            )
+        facts.candidates().sortedByDescending { StoreFacts.buildOrder(it.build.number) }
 
     private val failures = mutableMapOf<Candidate, String?>()
 

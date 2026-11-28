@@ -218,7 +218,7 @@ class DeliveryToolTest {
     fun `new attempt dispatch and its rerun start after a delivered receipt`() = temp { root ->
         val h = DeliveryToolHarness(root)
         h.counts[a] = 400
-        h.tags["deploy/testflight/26.09.01/400.1"] = a to "{}"
+        h.receipt("26.09.01", "400.1", a)
         val inputs =
             mapOf(
                 "operation" to "retry",
@@ -247,7 +247,7 @@ class DeliveryToolTest {
     fun `stale new attempt summary points to the real caller and latest number`() = temp { root ->
         val h = DeliveryToolHarness(root)
         h.counts[a] = 400
-        h.tags["deploy/testflight/26.09.01/400.2"] = a to "{}"
+        h.receipt("26.09.01", "400.2", a)
         val failure =
             h.run(
                     "startRun",

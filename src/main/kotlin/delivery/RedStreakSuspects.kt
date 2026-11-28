@@ -15,10 +15,7 @@ internal fun redStreakSuspects(
 ): SuspectRange {
     val delivered =
         requireReceiptNames("deploy/testflight/", tags.names("deploy/testflight/"))
-            .sortedWith(
-                compareByDescending<String> { StoreFacts.buildCount(it.substringAfterLast('/')) }
-                    .thenByDescending { BuildNumber(it.substringAfterLast('/')).attempt }
-            )
+            .sortedByDescending { StoreFacts.buildOrder(it.substringAfterLast('/')) }
             .asSequence()
             .map(tags::commit)
             .firstOrNull { source.isAncestor(it, firstRed) }

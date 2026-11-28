@@ -72,6 +72,12 @@ automatic deployment used the package from that CI run and the configured intern
 group can install the build. A `deploy/testflight/…` receipt identifies the delivered
 commit. Keep the App Store switch off until public release is ready.
 
+Apps that use commit-count build numbers can set `"build_numbering": "commit_count"` in
+`.github/delivery.json`. CI reserves `<source commit count>.<attempt>` for the verified
+commit. The same ledger allocates manual builds from the three-component sequence and
+retains earlier package identities for reruns. Update all shared action pins to v1.2.0
+or newer before enabling this setting.
+
 For an interrupted or uncertain upload, rerun the original deployment to reconcile
 Apple's state and reuse the existing build. A fresh manual dispatch starts a new build
 from the selected branch. If a receipt write failed after delivery, replace an expired

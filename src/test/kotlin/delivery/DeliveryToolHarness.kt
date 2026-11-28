@@ -121,6 +121,14 @@ class DeliveryToolHarness(val root: Path) {
         }
     }
 
+    fun receipt(version: String, number: String, sha: String) {
+        tags["deploy/testflight/$version/$number"] =
+            sha to
+                json.encodeToString(
+                    Receipt(sha, MarketingVersion(version), BuildNumber(number), "build-$number")
+                )
+    }
+
     fun upload(version: String, number: String, state: String, code: String? = null) {
         uploads += buildJsonObject {
             put("id", "upload-$number")
@@ -181,6 +189,7 @@ class DeliveryToolHarness(val root: Path) {
                     json.parseToJsonElement(requireNotNull(call.input)).jsonObject.string("name")
                 ok("{}")
             }
+            path == "git/ref/heads/mobile-delivery-state" -> CommandResult(1, "", "HTTP 404")
             path == "git/ref/heads/trunk" ->
                 if (failBranchRead) CommandResult(1, "", "HTTP 403")
                 else ok("""{"object":{"type":"commit","sha":"${remoteTip ?: tip}"}}""")
@@ -335,17 +344,7 @@ class DeliveryToolHarness(val root: Path) {
                 h.counts[sha] = index + 1
                 h.build("26.09.01", number)
                 h.upload("26.09.01", number, "COMPLETE")
-                h.tags["deploy/testflight/26.09.01/$number"] =
-                    sha to
-                        json.encodeToString(
-                            Receipt.serializer(),
-                            Receipt(
-                                sha,
-                                MarketingVersion("26.09.01"),
-                                BuildNumber(number),
-                                "build-$number",
-                            ),
-                        )
+                h.receipt("26.09.01", number, sha)
                 last = sha
             }
             return last

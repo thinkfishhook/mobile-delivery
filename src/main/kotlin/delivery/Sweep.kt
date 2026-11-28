@@ -36,7 +36,9 @@ class Sweep(
     private val redStreak: (String) -> String? = { null },
     private val preparations: () -> List<PreparationRecord> = { emptyList() },
 ) {
-    private val preparationRecords by lazy(preparations)
+    private val preparationRecords by lazy {
+        preparations().associateBy { it.preparation.number }
+    }
 
     fun run(tip: String, audit: Boolean = false): SweepReport {
         val findings = mutableListOf<SweepFinding>()
@@ -58,16 +60,19 @@ class Sweep(
         val repaired = mutableSetOf<String>()
         findings += repairReceipts(facts, repaired)
         if (audit) findings += auditReceipts(facts.receipts)
-        val tipTraces = beta.traces(tip, facts.copy(receipts = facts.receipts + repaired))
-        val reserved = reservedTip(tip, facts, facts.receipts + repaired)
-        findings +=
-            if (reserved == null) tipStatus(tip, tipTraces)
-            else
+        val receipts = facts.receipts + repaired
+        val (deliveryFinding, delivered) =
+            try {
+                deliveryStatus(tip, facts.copy(receipts = receipts))
+            } catch (error: Exception) {
+                if (error is CredentialProblem) throw error
                 SweepFinding(
                     IncidentSubject.BetaCommit(tip),
-                    if (reserved.first.request.origin == PackageOrigin.CI_VERIFIED) "delivered"
-                    else "manually delivered; verification not inferred",
-                )
+                    "delivery unread",
+                    repairError = error.displayMessage(),
+                ) to null
+            }
+        findings += deliveryFinding
         findings +=
             try {
                 appStore.sweep()
@@ -84,14 +89,11 @@ class Sweep(
         val appStoreRead = findings.none {
             it.operationKey == IncidentSubject.AppStore && it.repairError != null
         }
-        val receipts = facts.receipts + repaired
         try {
             incidents.sync(findings, tip) { key ->
                 checked(key, audit, appStoreRead, facts.builds, receipts)
             }
-            if (reserved?.first?.request?.origin == PackageOrigin.CI_VERIFIED)
-                onDelivered(tip, reserved.second)
-            else tipTraces.latest?.takeIf { it.receiptTarget == tip }?.let { onDelivered(tip, it) }
+            delivered?.let { onDelivered(tip, it) }
         } catch (error: Exception) {
             findings +=
                 SweepFinding(
@@ -103,21 +105,28 @@ class Sweep(
         return SweepReport(findings)
     }
 
-    private fun reservedTip(
-        tip: String,
-        facts: BetaFacts,
-        receipts: Set<String>,
-    ): Pair<Preparation, Trace>? {
-        if (receipts.none { BuildNumber(it.substringAfterLast('/')).legacyCount == null })
-            return null
+    private fun deliveryStatus(tip: String, facts: BetaFacts): Pair<SweepFinding, Trace?> {
+        val reserved = reservedTip(tip, facts)
+        val key = IncidentSubject.BetaCommit(tip)
+        if (reserved?.first?.request?.origin == PackageOrigin.CI_VERIFIED)
+            return SweepFinding(key, "delivered") to reserved.second
+
+        val traces = beta.traces(tip, facts, preparationRecords.keys)
+        val finding =
+            if (reserved == null) tipStatus(tip, traces)
+            else SweepFinding(key, "manually delivered; verification not inferred")
+        return finding to traces.latest?.takeIf { it.receiptTarget == tip }
+    }
+
+    private fun reservedTip(tip: String, facts: BetaFacts): Pair<Preparation, Trace>? {
         val matching =
-            preparationRecords
+            preparationRecords.values
                 .filter { record ->
                     val p = record.preparation
                     record.manifest != null &&
                         p.request.sha == tip &&
                         p.request.bundleId == config.bundleId &&
-                        "deploy/testflight/${p.version}/${p.number}" in receipts
+                        "deploy/testflight/${p.version}/${p.number}" in facts.receipts
                 }
                 .sortedWith(
                     compareByDescending<PreparationRecord> {
@@ -209,7 +218,6 @@ class Sweep(
             if (
                 version == null ||
                     number == null ||
-                    (number.legacyCount != null && number.legacyCount!! < baseline) ||
                     tag in facts.receipts ||
                     build.processingState != "VALID" ||
                     build.expired
@@ -217,16 +225,17 @@ class Sweep(
                 return@mapNotNull null
             try {
                 val preparation =
-                    if (number.legacyCount == null) {
-                        val record =
-                            preparationRecords.singleOrNull { it.preparation.number == number }
-                                ?: return@mapNotNull null
+                    preparationRecords[number]?.let { record ->
                         record.preparation.takeIf {
                             record.manifest != null &&
                                 it.version == version &&
                                 it.request.bundleId == config.bundleId
                         } ?: return@mapNotNull null
-                    } else null
+                    }
+                if (
+                    preparation == null && (number.legacyCount ?: return@mapNotNull null) < baseline
+                )
+                    return@mapNotNull null
                 // Not testable, or in a terminal TestFlight state such as expired: no receipt.
                 // Any other failure to read it is a repair error.
                 val testable =
@@ -268,20 +277,33 @@ class Sweep(
         }
     }
 
-    // A receipt must stay an annotated tag on the commit whose count matches its build number.
+    // Reserved receipts bind the source through preparation; legacy ones encode its count.
     private fun auditReceipts(receipts: Set<String>) = receipts.mapNotNull { tag ->
         try {
             val number = BuildNumber(tag.substringAfterLast('/'))
             val sha = tags.commit(tag)
+            val reserved = preparationRecords[number]
+            val provenance = tags.read(tag)?.preparation
             val count = number.legacyCount
-            if (count != null)
-                require(source.count(sha) == count) {
-                    "$tag points at $sha, whose count is not $count"
-                }
-            else
-                require(tags.read(tag)?.preparation?.request?.sha == sha) {
-                    "$tag has no matching reserved-source provenance"
-                }
+            when {
+                reserved != null ->
+                    require(
+                        reserved.manifest != null &&
+                            provenance == reserved.preparation &&
+                            reserved.preparation.request.sha == sha &&
+                            reserved.preparation.request.bundleId == config.bundleId
+                    ) {
+                        "$tag does not match its sealed preparation"
+                    }
+                provenance != null || count == null ->
+                    require(provenance?.request?.sha == sha) {
+                        "$tag has no matching reserved-source provenance"
+                    }
+                else ->
+                    require(source.count(sha) == count) {
+                        "$tag points at $sha, whose count is not $count"
+                    }
+            }
             null
         } catch (error: Exception) {
             SweepFinding(
